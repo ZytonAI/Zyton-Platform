@@ -18,10 +18,10 @@ export default async function PlatformLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <main className="flex-1 overflow-auto min-h-0">{children}</main>
       </div>
       <Toaster richColors position="top-right" />
     </div>

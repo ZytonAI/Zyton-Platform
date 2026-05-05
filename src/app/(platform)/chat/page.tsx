@@ -1,33 +1,37 @@
 import { TopBar } from "@/components/layout/TopBar";
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent } from "@/components/ui/card";
-import { MessageCircle } from "lucide-react";
+import { ChatClient } from "@/components/chat/ChatClient";
+import type { Conversation, WaSessionStatus } from "@/types";
 
 export default async function ChatPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Estado de la sesión WA almacenado en Supabase
+  const { data: session } = await supabase
+    .from("wa_sessions")
+    .select("status")
+    .eq("owner_id", user!.id)
+    .single();
+
+  const initialStatus = (session?.status ?? "disconnected") as WaSessionStatus;
+
+  // Conversaciones iniciales
+  const { data: conversations } = await supabase
+    .from("conversations")
+    .select("*")
+    .eq("owner_id", user!.id)
+    .order("last_message_at", { ascending: false, nullsFirst: false });
 
   return (
-    <>
+    <div className="flex flex-col h-screen">
       <TopBar title="Chat — WhatsApp" userEmail={user?.email} />
-      <div className="p-6">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mb-4">
-              <MessageCircle className="w-8 h-8 text-amber-600" />
-            </div>
-            <h3 className="font-semibold text-lg text-gray-900">
-              WhatsApp integrado
-            </h3>
-            <p className="text-muted-foreground mt-2 max-w-sm">
-              Conecta tu WhatsApp escaneando un QR y gestiona tus conversaciones
-              desde aquí. Disponible en Stage 3.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex-1 min-h-0">
+        <ChatClient
+          initialStatus={initialStatus}
+          initialConversations={(conversations ?? []) as Conversation[]}
+        />
       </div>
-    </>
+    </div>
   );
 }

@@ -47,3 +47,43 @@ export interface FileAttachment {
   size_bytes: number | null;
   created_at: string;
 }
+
+export type MessageDirection = "inbound" | "outbound";
+export type MessageStatus = "sent" | "delivered" | "read" | "failed";
+export type WaSessionStatus = "disconnected" | "connecting" | "connected";
+
+export interface Conversation {
+  id: string;
+  owner_id: string;
+  wa_chat_id: string;
+  contact_name: string | null;
+  contact_phone: string;
+  lead_id: string | null;
+  client_id: string | null;
+  last_message: string | null;
+  last_message_at: string | null;
+  unread_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Message {
+  id: string;
+  owner_id: string;
+  conversation_id: string;
+  wa_message_id: string | null;
+  direction: MessageDirection;
+  body: string;
+  media_url: string | null;
+  media_type: string | null;
+  status: MessageStatus;
+  created_at: string;
+}
+
+export interface WaSession {
+  id: string;
+  owner_id: string;
+  status: WaSessionStatus;
+  phone: string | null;
+  updated_at: string;
+}
