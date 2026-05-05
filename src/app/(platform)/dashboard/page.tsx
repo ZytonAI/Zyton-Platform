@@ -9,35 +9,63 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const [leadsRes, clientsRes, messagesRes, convertedRes] = await Promise.all([
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user!.id),
+    supabase
+      .from("clients")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user!.id)
+      .eq("status", "active"),
+    supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user!.id),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user!.id)
+      .eq("status", "converted"),
+  ]);
+
+  const totalLeads = leadsRes.count ?? 0;
+  const activeClients = clientsRes.count ?? 0;
+  const totalMessages = messagesRes.count ?? 0;
+  const convertedLeads = convertedRes.count ?? 0;
+  const conversionRate =
+    totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0;
+
   const stats = [
     {
       title: "Leads totales",
-      value: "—",
-      description: "Próximamente",
+      value: totalLeads.toString(),
+      description: `${convertedLeads} convertidos`,
       icon: Users,
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
     {
       title: "Clientes activos",
-      value: "—",
-      description: "Próximamente",
+      value: activeClients.toString(),
+      description: "Estado: activo",
       icon: Briefcase,
       color: "text-emerald-600",
       bg: "bg-emerald-50",
     },
     {
       title: "Tasa de conversión",
-      value: "—",
-      description: "Próximamente",
+      value: `${conversionRate}%`,
+      description: `${convertedLeads} de ${totalLeads} leads`,
       icon: TrendingUp,
       color: "text-violet-600",
       bg: "bg-violet-50",
     },
     {
       title: "Mensajes WhatsApp",
-      value: "—",
-      description: "Próximamente",
+      value: totalMessages.toString(),
+      description: "Total acumulado",
       icon: MessageCircle,
       color: "text-amber-600",
       bg: "bg-amber-50",
@@ -79,20 +107,6 @@ export default async function DashboardPage() {
             </Card>
           ))}
         </div>
-
-        <Card className="border-0 shadow-sm">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-              <span className="text-primary font-bold text-2xl">Z</span>
-            </div>
-            <h3 className="font-semibold text-lg text-gray-900">
-              Stage 1 completado
-            </h3>
-            <p className="text-muted-foreground mt-2 max-w-sm">
-              La fundación está lista. Próximo paso: Stage 2 — CRM de Leads y Clientes.
-            </p>
-          </CardContent>
-        </Card>
       </div>
     </>
   );

@@ -87,3 +87,14 @@ export interface WaSession {
   phone: string | null;
   updated_at: string;
 }
+
+export interface AgentConfig {
+  id: string;
+  owner_id: string;
+  enabled: boolean;
+  name: string;
+  system_prompt: string;
+  model: string;
+  created_at: string;
+  updated_at: string;
+}

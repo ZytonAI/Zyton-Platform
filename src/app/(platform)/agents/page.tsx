@@ -1,7 +1,15 @@
-import { TopBar } from "@/components/layout/TopBar";
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent } from "@/components/ui/card";
-import { Bot } from "lucide-react";
+import { TopBar } from "@/components/layout/TopBar";
+import { AgentConfigClient } from "@/components/agents/AgentConfigClient";
+import type { AgentConfig } from "@/types";
+
+const DEFAULT_AGENT_VALUES = {
+  enabled: false,
+  name: "Asistente ZytonAI",
+  system_prompt:
+    "Eres un asistente de ventas amable y profesional de ZytonAI. Responde de forma concisa y útil. Si el cliente tiene preguntas sobre precios o detalles específicos que no conoces, ofrece coordinar una llamada con el equipo.",
+  model: "claude-haiku-4-5-20251001",
+};
 
 export default async function AgentsPage() {
   const supabase = await createClient();
@@ -9,25 +17,24 @@ export default async function AgentsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const { data } = await supabase
+    .from("ai_agents")
+    .select("*")
+    .eq("owner_id", user!.id)
+    .single();
+
+  const agentConfig: AgentConfig = data ?? {
+    id: "",
+    owner_id: user!.id,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...DEFAULT_AGENT_VALUES,
+  };
+
   return (
     <>
       <TopBar title="Agentes IA" userEmail={user?.email} />
-      <div className="p-6">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-violet-50 flex items-center justify-center mb-4">
-              <Bot className="w-8 h-8 text-violet-600" />
-            </div>
-            <h3 className="font-semibold text-lg text-gray-900">
-              Agentes de automatización
-            </h3>
-            <p className="text-muted-foreground mt-2 max-w-sm">
-              Configura agentes de IA para automatizar áreas de tu negocio.
-              Disponible en Stage 4.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <AgentConfigClient initialConfig={agentConfig} />
     </>
   );
 }
