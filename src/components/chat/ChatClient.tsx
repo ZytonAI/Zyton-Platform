@@ -45,6 +45,14 @@ export function ChatClient({ initialStatus, initialConversations }: Props) {
     setStatus("connected");
   }, []);
 
+  const handleNewConversation = useCallback((conv: Conversation) => {
+    setConversations((prev) => {
+      const exists = prev.find((c) => c.id === conv.id);
+      if (exists) return prev;
+      return [conv, ...prev];
+    });
+  }, []);
+
   if (status !== "connected") {
     return (
       <div className="h-full">
@@ -61,6 +69,7 @@ export function ChatClient({ initialStatus, initialConversations }: Props) {
           conversations={conversations}
           selectedId={selected?.id ?? null}
           onSelect={setSelected}
+          onNewConversation={handleNewConversation}
         />
       </div>
 

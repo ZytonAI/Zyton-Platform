@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { Search, MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Search, MessageCircle, Plus, Loader2 } from "lucide-react";
 import type { Conversation } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -26,10 +34,16 @@ interface Props {
   conversations: Conversation[];
   selectedId: string | null;
   onSelect: (conv: Conversation) => void;
+  onNewConversation: (conv: Conversation) => void;
 }
 
-export function ConversationList({ conversations, selectedId, onSelect }: Props) {
+export function ConversationList({ conversations, selectedId, onSelect, onNewConversation }: Props) {
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const filtered = conversations.filter((c) => {
     const q = search.toLowerCase();
@@ -40,10 +54,34 @@ export function ConversationList({ conversations, selectedId, onSelect }: Props)
     );
   });
 
+  async function handleCreate() {
+    if (!phone.trim()) { setError("Ingresa un número de teléfono"); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/whatsapp/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phone.trim(), name: name.trim() }),
+      });
+      if (!res.ok) { const d = await res.json(); setError(d.error ?? "Error"); return; }
+      const conv: Conversation = await res.json();
+      onNewConversation(conv);
+      onSelect(conv);
+      setOpen(false);
+      setPhone("");
+      setName("");
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="flex flex-col h-full border-r bg-white">
-      <div className="p-3 border-b">
-        <div className="relative">
+      <div className="p-3 border-b flex gap-2">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Buscar conversación..."
@@ -52,6 +90,9 @@ export function ConversationList({ conversations, selectedId, onSelect }: Props)
             className="pl-9 h-9 text-sm"
           />
         </div>
+        <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={() => setOpen(true)}>
+          <Plus className="w-4 h-4" />
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -97,6 +138,49 @@ export function ConversationList({ conversations, selectedId, onSelect }: Props)
           ))
         )}
       </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nueva conversación</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Teléfono <span className="text-red-500">*</span>
+              </label>
+              <Input
+                placeholder="Ej: 5491112345678"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Código de país + número, sin espacios ni símbolos
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Nombre (opcional)</label>
+              <Input
+                placeholder="Ej: Juan García"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              />
+            </div>
+            {error && <p className="text-sm text-red-500">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreate} disabled={loading}>
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Crear conversación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
