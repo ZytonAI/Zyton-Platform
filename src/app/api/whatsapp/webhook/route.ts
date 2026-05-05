@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
 // El whatsapp-service llama a este endpoint con cada mensaje entrante
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
   // Usar service role para poder escribir en nombre del owner correcto
   // En single-tenant: hay un solo usuario. Buscamos la sesión conectada.
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Obtener el owner activo buscando la sesión WA conectada
   const { data: session } = await supabase
