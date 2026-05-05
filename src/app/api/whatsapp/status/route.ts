@@ -22,9 +22,7 @@ export async function GET() {
     );
 
     return NextResponse.json(bridgeStatus);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[status] Bridge error:", message);
-    return NextResponse.json({ status: "disconnected", qr: null, phone: null, _error: message });
+  } catch {
+    return NextResponse.json({ status: "disconnected", qr: null, phone: null });
   }
 }

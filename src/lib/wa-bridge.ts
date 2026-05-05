@@ -15,7 +15,7 @@ async function bridgeFetch(path: string, options: RequestInit = {}) {
 
 export async function getBridgeStatus() {
   const res = await bridgeFetch("/status");
-  if (!res.ok) throw new Error(`Bridge respondió ${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(`Bridge error ${res.status}`);
   return res.json() as Promise<{ status: string; qr: string | null; phone: string | null }>;
 }
 
