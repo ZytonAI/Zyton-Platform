@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 interface ApifyPlace {
   title?: string;
@@ -13,7 +13,7 @@ interface ApifyPlace {
   categoryName?: string;
 }
 
-function send(controller: ReadableStreamDefaultController, encoder: TextEncoder, data: object) {
+function emit(controller: ReadableStreamDefaultController, encoder: TextEncoder, data: object) {
   controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 }
 
@@ -22,33 +22,45 @@ async function sleep(ms: number) {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Wrap setup in try/catch so errors return readable JSON instead of 500
+  let supabase: Awaited<ReturnType<typeof createClient>>;
+  let userId: string;
+  let tipo: string;
+  let ciudad: string;
 
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    userId = user.id;
 
-  const { tipo, ciudad } = await request.json();
-  if (!tipo || !ciudad) {
-    return NextResponse.json({ error: "Faltan tipo y ciudad" }, { status: 400 });
+    const body = await request.json().catch(() => ({})) as { tipo?: string; ciudad?: string };
+    tipo = body.tipo ?? "";
+    ciudad = body.ciudad ?? "";
+
+    if (!tipo || !ciudad) {
+      return NextResponse.json({ error: "Faltan tipo y ciudad" }, { status: 400 });
+    }
+  } catch (err) {
+    console.error("[raul] setup error:", err);
+    return NextResponse.json({ error: `Error de configuración: ${String(err)}` }, { status: 500 });
   }
 
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
-      const emit = (data: object) => send(controller, encoder, data);
+      const send = (data: object) => emit(controller, encoder, data);
 
       try {
         const token = process.env.APIFY_TOKEN;
         if (!token) {
-          emit({ type: "error", message: "APIFY_TOKEN no configurado en el servidor" });
+          send({ type: "error", message: "APIFY_TOKEN no está configurado en Vercel Environment Variables" });
           controller.close();
           return;
         }
 
-        emit({ type: "status", message: `Buscando "${tipo}" en "${ciudad}" vía Google Places...` });
+        send({ type: "status", message: `Buscando "${tipo}" en "${ciudad}" vía Google Places...` });
 
         const runResp = await fetch(
           `https://api.apify.com/v2/acts/compass~crawler-google-places/runs?token=${token}`,
@@ -64,7 +76,7 @@ export async function POST(request: Request) {
         );
 
         if (!runResp.ok) {
-          emit({ type: "error", message: `Error iniciando Apify: ${await runResp.text()}` });
+          send({ type: "error", message: `Error iniciando Apify: ${await runResp.text()}` });
           controller.close();
           return;
         }
@@ -73,11 +85,10 @@ export async function POST(request: Request) {
         const runId: string = runData.data.id;
         const datasetId: string = runData.data.defaultDatasetId;
 
-        emit({ type: "status", message: "Run iniciado. Esperando resultados de Google Maps..." });
+        send({ type: "status", message: "Run iniciado. Esperando resultados de Google Maps..." });
 
-        // Poll hasta que termine
         let done = false;
-        for (let attempt = 1; attempt <= 30; attempt++) {
+        for (let attempt = 1; attempt <= 18; attempt++) {
           await sleep(10_000);
 
           const statusData = await fetch(
@@ -85,18 +96,18 @@ export async function POST(request: Request) {
           ).then((r) => r.json());
 
           const status: string = statusData.data.status;
-          emit({ type: "status", message: `Procesando... (${attempt * 10}s) — ${status}` });
+          send({ type: "status", message: `Procesando... (${attempt * 10}s) — ${status}` });
 
           if (status === "SUCCEEDED") { done = true; break; }
           if (status === "FAILED" || status === "ABORTED") {
-            emit({ type: "error", message: `La búsqueda falló: ${status}` });
+            send({ type: "error", message: `La búsqueda falló: ${status}` });
             controller.close();
             return;
           }
         }
 
         if (!done) {
-          emit({ type: "error", message: "Tiempo de espera agotado (5 min). Intenta de nuevo." });
+          send({ type: "error", message: "Tiempo agotado (3 min). Intenta con menos resultados." });
           controller.close();
           return;
         }
@@ -105,23 +116,21 @@ export async function POST(request: Request) {
           `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=50`
         ).then((r) => r.json());
 
-        emit({ type: "status", message: `${places.length} lugares encontrados. Filtrando y guardando...` });
+        send({ type: "status", message: `${places.length} lugares encontrados. Filtrando y guardando...` });
 
-        // Filtrar: solo leads CON número de teléfono
-        const conContacto = places.filter((p) => p.phone && p.phone.trim() !== "");
+        const conContacto = places.filter((p) => p.phone?.trim());
         const sinContacto = places.length - conContacto.length;
 
         if (!conContacto.length) {
-          emit({ type: "error", message: "Ningún resultado tiene número de contacto. Prueba otra búsqueda." });
+          send({ type: "error", message: "Ningún resultado tiene número de contacto." });
           controller.close();
           return;
         }
 
         const rows = conContacto.map((p) => ({
-          owner_id: user.id,
+          owner_id: userId,
           name: p.title ?? p.name ?? "Sin nombre",
           phone: p.phone!,
-          // Si no tiene web → marca explícita, Elisa la filtrará
           website: p.website?.trim() || "Sin página web",
           company: p.title ?? p.name ?? null,
           source: "raul",
@@ -137,7 +146,7 @@ export async function POST(request: Request) {
           .select();
 
         if (dbErr) {
-          emit({ type: "error", message: `Error guardando leads: ${dbErr.message}` });
+          send({ type: "error", message: `Error guardando en BD: ${dbErr.message}` });
           controller.close();
           return;
         }
@@ -145,7 +154,7 @@ export async function POST(request: Request) {
         const conWeb = saved?.filter((l) => l.website !== "Sin página web").length ?? 0;
         const sinWeb = (saved?.length ?? 0) - conWeb;
 
-        emit({
+        send({
           type: "result",
           leads: saved ?? [],
           saved: saved?.length ?? 0,
@@ -154,7 +163,7 @@ export async function POST(request: Request) {
           conWeb,
         });
       } catch (err) {
-        emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
+        emit(controller, encoder, { type: "error", message: err instanceof Error ? err.message : String(err) });
       } finally {
         controller.close();
       }
