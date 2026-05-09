@@ -13,7 +13,7 @@ export async function GET(
 
   const { data: attachment, error: dbErr } = await supabase
     .from("file_attachments")
-    .select("storage_path, content_type, content")
+    .select("*")
     .eq("id", id)
     .single();
 
