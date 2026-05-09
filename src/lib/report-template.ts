@@ -45,7 +45,7 @@ export function generateReportHtml(analysis: WebAnalysis, ciudad: string): strin
   <title>Informe — ${analysis.nombre}</title>
   <style>
     @page { size: A4; margin: 0; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
     /* ── Browser view: natural scroll ── */
     html { background: #e8eaf0; }
