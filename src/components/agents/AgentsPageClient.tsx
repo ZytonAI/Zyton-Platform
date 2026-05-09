@@ -146,35 +146,60 @@ function RaulAgent({ onLeadsAdded }: { onLeadsAdded: () => void }) {
 
         <StatusLog logs={logs} running={running} />
 
-        {results.length > 0 && (
-          <div className="space-y-2 mt-1">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              {results.length} leads encontrados
-            </p>
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {results.map((lead) => (
-                <div key={lead.id} className="border rounded-lg p-2.5 text-xs space-y-1">
-                  <div className="font-semibold text-sm text-gray-900 truncate">{lead.name}</div>
-                  {lead.phone && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Phone className="w-3 h-3" /> {lead.phone}
+        {results.length > 0 && (() => {
+          const accionables = results.filter(
+            (l) => l.website === "Sin página web" || l.analyzed
+          );
+          const pendientes = results.length - accionables.length;
+          return (
+            <div className="space-y-2 mt-1">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {accionables.length} accionables
+                </p>
+                {pendientes > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {pendientes} esperando a Elisa
+                  </span>
+                )}
+              </div>
+              {accionables.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-3">
+                  Todos los leads tienen web — Elisa los analizará.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {accionables.map((lead) => (
+                    <div key={lead.id} className="border rounded-lg p-2.5 text-xs space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-sm text-gray-900 truncate">{lead.name}</span>
+                        {lead.analyzed ? (
+                          <span className="shrink-0 text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
+                            Con informe
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+                            Sin web
+                          </span>
+                        )}
+                      </div>
+                      {lead.phone && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Phone className="w-3 h-3" /> {lead.phone}
+                        </div>
+                      )}
+                      {lead.notes && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <MapPin className="w-3 h-3" />{lead.notes}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {lead.website && (
-                    <div className={`flex items-center gap-1.5 truncate ${lead.website === "Sin página web" ? "text-amber-500" : "text-muted-foreground"}`}>
-                      <Globe className="w-3 h-3 shrink-0" />{lead.website}
-                    </div>
-                  )}
-                  {lead.notes && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <MapPin className="w-3 h-3" />{lead.notes}
-                    </div>
-                  )}
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </CardContent>
     </Card>
   );
