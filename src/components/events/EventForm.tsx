@@ -31,13 +31,14 @@ interface Props {
   onClose: () => void;
   onSave: (data: CalendarEvent) => void;
   initialData?: CalendarEvent;
+  defaultDate?: string; // "YYYY-MM-DDTHH:mm" pre-filled when creating from calendar
 }
 
 function toDatetimeLocal(iso: string) {
   return iso ? iso.slice(0, 16) : "";
 }
 
-export function EventForm({ open, onClose, onSave, initialData }: Props) {
+export function EventForm({ open, onClose, onSave, initialData, defaultDate }: Props) {
   const isEdit = !!initialData;
 
   const {
@@ -51,7 +52,7 @@ export function EventForm({ open, onClose, onSave, initialData }: Props) {
     resolver: zodResolver(calendarEventSchema),
     defaultValues: {
       title:       initialData?.title ?? "",
-      event_date:  initialData ? toDatetimeLocal(initialData.event_date) : "",
+      event_date:  initialData ? toDatetimeLocal(initialData.event_date) : (defaultDate ?? ""),
       type:        initialData?.type ?? "event",
       description: initialData?.description ?? "",
       status:      initialData?.status ?? "pending",
