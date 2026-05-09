@@ -10,12 +10,12 @@ export async function GET() {
   try {
     const bridgeStatus = await getBridgeStatus();
 
-    // Sincronizar el estado en Supabase
     await supabase.from("wa_sessions").upsert(
       {
         owner_id: user.id,
         status: bridgeStatus.status,
         phone: bridgeStatus.phone,
+        qr_code: bridgeStatus.qr,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "owner_id" }
@@ -23,6 +23,21 @@ export async function GET() {
 
     return NextResponse.json(bridgeStatus);
   } catch {
+    // Bridge inaccesible: usar Supabase como fuente de verdad
+    const { data: session } = await supabase
+      .from("wa_sessions")
+      .select("status, phone, qr_code")
+      .eq("owner_id", user.id)
+      .single();
+
+    if (session) {
+      return NextResponse.json({
+        status: session.status,
+        phone: session.phone ?? null,
+        qr: session.qr_code ?? null,
+      });
+    }
+
     return NextResponse.json({ status: "disconnected", qr: null, phone: null });
   }
 }
