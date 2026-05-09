@@ -198,16 +198,20 @@ function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
   const [allDone, setAllDone] = useState(false);
 
   const loadStats = useCallback(async () => {
-    const supabase = createClient();
-    const base = supabase.from("leads").select("*", { count: "exact", head: true })
-      .eq("source", "raul");
+    try {
+      const supabase = createClient();
+      const base = supabase.from("leads").select("*", { count: "exact", head: true })
+        .eq("source", "raul");
 
-    const [{ count: pending }, { count: done }] = await Promise.all([
-      base.eq("analyzed", false).not("website", "is", null).neq("website", "Sin página web"),
-      base.eq("analyzed", true),
-    ]);
+      const [pendingRes, doneRes] = await Promise.all([
+        base.eq("analyzed", false).not("website", "is", null).neq("website", "Sin página web"),
+        base.eq("analyzed", true),
+      ]);
 
-    setStats({ pending: pending ?? 0, done: done ?? 0 });
+      setStats({ pending: pendingRes.count ?? 0, done: doneRes.count ?? 0 });
+    } catch {
+      setStats({ pending: 0, done: 0 });
+    }
   }, []);
 
   useEffect(() => { loadStats(); }, [loadStats, refreshTrigger]);
@@ -215,7 +219,7 @@ function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
   async function run() {
     setRunning(true); setLogs([]); setResults([]); setError(null); setAllDone(false);
     try {
-      for await (const event of readSSE("/api/agents/elisa", {})) {
+      for await (const event of readSSE("/api/agents/elisa", {}) as AsyncGenerator<AgentEvent>) {
         if (event.type === "status" || event.type === "progress") {
           setLogs((p) => [...p, event.message ?? ""]);
         } else if (event.type === "result") {
