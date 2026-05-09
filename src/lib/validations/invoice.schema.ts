@@ -16,7 +16,7 @@ export const invoiceSchema = z.object({
   category:             z.string().optional().or(z.literal("")),
   due_date:             z.string().min(1, "La fecha de pago es requerida"),
   status:               z.enum(["pending", "paid", "overdue"]),
-  is_recurring:         z.boolean().default(false),
+  is_recurring:         z.boolean(),
   recurrence_interval:  z.enum(["weekly","biweekly","monthly","bimonthly","quarterly","semiannual","annual"]).nullable().optional(),
   notes:                z.string().optional().or(z.literal("")),
 }).refine(
