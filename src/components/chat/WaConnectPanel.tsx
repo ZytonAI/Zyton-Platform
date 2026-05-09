@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Image from "next/image";
 import { Loader2, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ export function WaConnectPanel({ onConnected }: Props) {
   const [data, setData] = useState<StatusResponse>({ status: "disconnected", qr: null, phone: null });
   const [loading, setLoading] = useState(true);
   const [reconnecting, setReconnecting] = useState(false);
+  const mountedAt = useRef(Date.now());
 
   const poll = useCallback(async () => {
     try {
@@ -27,7 +28,10 @@ export function WaConnectPanel({ onConnected }: Props) {
       if (res.ok) {
         const json: StatusResponse = await res.json();
         setData(json);
-        if (json.status === "connected") onConnected();
+        // Ignorar "connected" en los primeros 3s para evitar falsos positivos tras un logout
+        if (json.status === "connected" && Date.now() - mountedAt.current > 3000) {
+          onConnected();
+        }
       }
     } finally {
       setLoading(false);

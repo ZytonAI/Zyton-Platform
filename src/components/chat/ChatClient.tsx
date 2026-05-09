@@ -50,10 +50,10 @@ export function ChatClient({ initialStatus, initialConversations }: Props) {
 
   const handleDisconnect = useCallback(async () => {
     setDisconnecting(true);
+    setStatus("disconnected");
+    setSelected(null);
     try {
       await fetch("/api/whatsapp/disconnect", { method: "POST" });
-      setStatus("disconnected");
-      setSelected(null);
     } finally {
       setDisconnecting(false);
     }
