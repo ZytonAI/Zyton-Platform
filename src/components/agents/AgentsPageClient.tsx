@@ -190,7 +190,7 @@ interface ElisaResult {
 }
 
 function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
-  const [stats, setStats] = useState<{ pending: number; done: number } | null>(null);
+  const [stats, setStats] = useState<{ pending: number; done: number; noWeb: number } | null>(null);
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [results, setResults] = useState<ElisaResult[]>([]);
@@ -203,14 +203,19 @@ function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
       const base = supabase.from("leads").select("*", { count: "exact", head: true })
         .eq("source", "raul");
 
-      const [pendingRes, doneRes] = await Promise.all([
+      const [pendingRes, doneRes, noWebRes] = await Promise.all([
         base.eq("analyzed", false).not("website", "is", null).neq("website", "Sin página web"),
         base.eq("analyzed", true),
+        base.eq("analyzed", false).or("website.is.null,website.eq.Sin página web"),
       ]);
 
-      setStats({ pending: pendingRes.count ?? 0, done: doneRes.count ?? 0 });
+      setStats({
+        pending: pendingRes.count ?? 0,
+        done: doneRes.count ?? 0,
+        noWeb: noWebRes.count ?? 0,
+      });
     } catch {
-      setStats({ pending: 0, done: 0 });
+      setStats({ pending: 0, done: 0, noWeb: 0 });
     }
   }, []);
 
@@ -244,7 +249,8 @@ function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
   }
 
   const noPending = stats !== null && stats.pending === 0;
-  const noLeads = stats !== null && stats.pending === 0 && stats.done === 0;
+  const noLeads = stats !== null && stats.pending === 0 && stats.done === 0 && stats.noWeb === 0;
+  const allNoWeb = stats !== null && stats.pending === 0 && stats.noWeb > 0 && stats.done === 0;
 
   return (
     <Card className="border-0 shadow-sm flex-1">
@@ -262,10 +268,14 @@ function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
       <CardContent className="space-y-4">
         {/* Stats */}
         {stats && (
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <div className="flex-1 bg-violet-50 rounded-lg p-3 text-center">
               <p className="text-2xl font-bold text-violet-700">{stats.pending}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Pendientes</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Con web</p>
+            </div>
+            <div className="flex-1 bg-amber-50 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-amber-600">{stats.noWeb}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Sin web</p>
             </div>
             <div className="flex-1 bg-emerald-50 rounded-lg p-3 text-center">
               <p className="text-2xl font-bold text-emerald-700">{stats.done}</p>
@@ -279,6 +289,13 @@ function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
           <p className="text-xs text-muted-foreground text-center py-2">
             Raúl aún no ha generado leads. Ejecútalo primero.
           </p>
+        ) : allNoWeb ? (
+          <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-3">
+            <Globe className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              Los {stats!.noWeb} leads encontrados no tienen página web. Prueba buscar otro tipo de negocio (ej: clínicas, hoteles, restaurantes con mayor presencia online).
+            </span>
+          </div>
         ) : noPending && !running ? (
           <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 rounded-lg p-3">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
