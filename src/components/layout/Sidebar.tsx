@@ -9,17 +9,21 @@ import {
   MessageCircle,
   Bot,
   LogOut,
+  Receipt,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/leads", label: "Leads", icon: Users },
-  { href: "/clients", label: "Clientes", icon: Briefcase },
-  { href: "/chat", label: "Chat", icon: MessageCircle },
-  { href: "/agents", label: "Agentes", icon: Bot },
+  { href: "/dashboard", label: "Dashboard",  icon: LayoutDashboard },
+  { href: "/leads",     label: "Leads",       icon: Users },
+  { href: "/clients",   label: "Clientes",    icon: Briefcase },
+  { href: "/chat",      label: "Chat",        icon: MessageCircle },
+  { href: "/agents",    label: "Agentes",     icon: Bot },
+  { href: "/invoices",  label: "Facturas",    icon: Receipt },
+  { href: "/events",    label: "Calendario",  icon: CalendarDays },
 ];
 
 export function Sidebar() {

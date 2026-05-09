@@ -98,3 +98,32 @@ export interface AgentConfig {
   created_at: string;
   updated_at: string;
 }
+
+export type InvoiceStatus = "pending" | "paid" | "overdue";
+export type CalendarEventType = "event" | "task" | "deadline";
+export type CalendarEventStatus = "pending" | "done";
+
+export interface Invoice {
+  id: string;
+  owner_id: string;
+  title: string;
+  amount: number;
+  category: string | null;
+  due_date: string;
+  status: InvoiceStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  owner_id: string;
+  title: string;
+  event_date: string;
+  type: CalendarEventType;
+  description: string | null;
+  status: CalendarEventStatus;
+  created_at: string;
+  updated_at: string;
+}

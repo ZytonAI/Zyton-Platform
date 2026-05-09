@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import type { LeadStatus, ClientStatus } from "@/types";
+import type { LeadStatus, ClientStatus, InvoiceStatus, CalendarEventStatus } from "@/types";
 
 const LEAD_CONFIG: Record<LeadStatus, { label: string; className: string }> = {
   new:       { label: "Nuevo",      className: "bg-gray-100 text-gray-700 hover:bg-gray-100" },
@@ -15,15 +15,28 @@ const CLIENT_CONFIG: Record<ClientStatus, { label: string; className: string }> 
   churned:  { label: "Perdido",   className: "bg-red-100 text-red-700 hover:bg-red-100" },
 };
 
+const INVOICE_CONFIG: Record<InvoiceStatus, { label: string; className: string }> = {
+  pending: { label: "Pendiente", className: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100" },
+  paid:    { label: "Pagada",    className: "bg-green-100 text-green-700 hover:bg-green-100" },
+  overdue: { label: "Vencida",   className: "bg-red-100 text-red-700 hover:bg-red-100" },
+};
+
+const EVENT_CONFIG: Record<CalendarEventStatus, { label: string; className: string }> = {
+  pending: { label: "Pendiente", className: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
+  done:    { label: "Hecho",     className: "bg-green-100 text-green-700 hover:bg-green-100" },
+};
+
 interface Props {
-  status: LeadStatus | ClientStatus;
-  type: "lead" | "client";
+  status: LeadStatus | ClientStatus | InvoiceStatus | CalendarEventStatus;
+  type: "lead" | "client" | "invoice" | "event";
 }
 
 export function StatusBadge({ status, type }: Props) {
-  const config = type === "lead"
-    ? LEAD_CONFIG[status as LeadStatus]
-    : CLIENT_CONFIG[status as ClientStatus];
+  let config: { label: string; className: string };
+  if (type === "lead")         config = LEAD_CONFIG[status as LeadStatus];
+  else if (type === "client")  config = CLIENT_CONFIG[status as ClientStatus];
+  else if (type === "invoice") config = INVOICE_CONFIG[status as InvoiceStatus];
+  else                         config = EVENT_CONFIG[status as CalendarEventStatus];
 
   return (
     <Badge className={`text-xs font-medium border-0 ${config.className}`}>
