@@ -13,6 +13,7 @@ export interface Lead {
   notes: string | null;
   website: string | null;
   maps_url: string | null;
+  analyzed: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -100,17 +101,21 @@ export interface ApifyLead {
   category: string | null;
 }
 
-export type AgentEventType = "status" | "result" | "error" | "done";
+export type AgentEventType = "status" | "progress" | "result" | "error" | "done";
 
 export interface AgentEvent {
   type: AgentEventType;
   message?: string;
+  // Raúl
   leads?: Lead[];
   saved?: number;
+  // Elisa
   analysis?: WebAnalysis;
   html?: string;
   lead_id?: string;
   report_url?: string;
+  current?: number;
+  total?: number;
 }
 
 export interface WebAnalysis {

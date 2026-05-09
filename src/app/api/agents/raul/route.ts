@@ -11,8 +11,6 @@ interface ApifyPlace {
   website?: string;
   url?: string;
   categoryName?: string;
-  address?: string;
-  city?: string;
 }
 
 function send(controller: ReadableStreamDefaultController, encoder: TextEncoder, data: object) {
@@ -50,9 +48,8 @@ export async function POST(request: Request) {
           return;
         }
 
-        emit({ type: "status", message: `Buscando "${tipo}" en "${ciudad}" via Google Places...` });
+        emit({ type: "status", message: `Buscando "${tipo}" en "${ciudad}" vía Google Places...` });
 
-        // Start Apify run
         const runResp = await fetch(
           `https://api.apify.com/v2/acts/compass~crawler-google-places/runs?token=${token}`,
           {
@@ -67,8 +64,7 @@ export async function POST(request: Request) {
         );
 
         if (!runResp.ok) {
-          const err = await runResp.text();
-          emit({ type: "error", message: `Error iniciando Apify: ${err}` });
+          emit({ type: "error", message: `Error iniciando Apify: ${await runResp.text()}` });
           controller.close();
           return;
         }
@@ -77,24 +73,23 @@ export async function POST(request: Request) {
         const runId: string = runData.data.id;
         const datasetId: string = runData.data.defaultDatasetId;
 
-        emit({ type: "status", message: `Run iniciado. Procesando resultados...` });
+        emit({ type: "status", message: "Run iniciado. Esperando resultados de Google Maps..." });
 
-        // Poll until done (max 5 min, every 10s)
+        // Poll hasta que termine
         let done = false;
         for (let attempt = 1; attempt <= 30; attempt++) {
           await sleep(10_000);
 
-          const statusResp = await fetch(
+          const statusData = await fetch(
             `https://api.apify.com/v2/actor-runs/${runId}?token=${token}`
-          );
-          const statusData = await statusResp.json();
-          const status: string = statusData.data.status;
+          ).then((r) => r.json());
 
-          emit({ type: "status", message: `Buscando... (${attempt * 10}s) — ${status}` });
+          const status: string = statusData.data.status;
+          emit({ type: "status", message: `Procesando... (${attempt * 10}s) — ${status}` });
 
           if (status === "SUCCEEDED") { done = true; break; }
           if (status === "FAILED" || status === "ABORTED") {
-            emit({ type: "error", message: `La búsqueda falló en Apify: ${status}` });
+            emit({ type: "error", message: `La búsqueda falló: ${status}` });
             controller.close();
             return;
           }
@@ -106,31 +101,34 @@ export async function POST(request: Request) {
           return;
         }
 
-        // Fetch results
-        emit({ type: "status", message: "Descargando resultados..." });
-        const resultsResp = await fetch(
+        const places: ApifyPlace[] = await fetch(
           `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=50`
-        );
-        const places: ApifyPlace[] = await resultsResp.json();
+        ).then((r) => r.json());
 
-        if (!places.length) {
-          emit({ type: "error", message: "No se encontraron resultados para esa búsqueda." });
+        emit({ type: "status", message: `${places.length} lugares encontrados. Filtrando y guardando...` });
+
+        // Filtrar: solo leads CON número de teléfono
+        const conContacto = places.filter((p) => p.phone && p.phone.trim() !== "");
+        const sinContacto = places.length - conContacto.length;
+
+        if (!conContacto.length) {
+          emit({ type: "error", message: "Ningún resultado tiene número de contacto. Prueba otra búsqueda." });
           controller.close();
           return;
         }
 
-        emit({ type: "status", message: `Guardando ${places.length} leads en Supabase...` });
-
-        const rows = places.map((p) => ({
+        const rows = conContacto.map((p) => ({
           owner_id: user.id,
           name: p.title ?? p.name ?? "Sin nombre",
-          phone: p.phone ?? null,
-          website: p.website ?? null,
+          phone: p.phone!,
+          // Si no tiene web → marca explícita, Elisa la filtrará
+          website: p.website?.trim() || "Sin página web",
           company: p.title ?? p.name ?? null,
           source: "raul",
           status: "new",
           notes: p.categoryName ?? null,
           maps_url: p.url ?? null,
+          analyzed: false,
         }));
 
         const { data: saved, error: dbErr } = await supabase
@@ -144,7 +142,17 @@ export async function POST(request: Request) {
           return;
         }
 
-        emit({ type: "result", leads: saved ?? [], saved: saved?.length ?? 0 });
+        const conWeb = saved?.filter((l) => l.website !== "Sin página web").length ?? 0;
+        const sinWeb = (saved?.length ?? 0) - conWeb;
+
+        emit({
+          type: "result",
+          leads: saved ?? [],
+          saved: saved?.length ?? 0,
+          sinContacto,
+          sinWeb,
+          conWeb,
+        });
       } catch (err) {
         emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
       } finally {
