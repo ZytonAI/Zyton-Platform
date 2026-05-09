@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { invoiceSchema, type InvoiceFormData } from "@/lib/validations/invoice.schema";
+import { invoiceSchema, type InvoiceFormData, RECURRENCE_INTERVALS } from "@/lib/validations/invoice.schema";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -43,24 +44,32 @@ export function InvoiceForm({ open, onClose, onSave, initialData }: Props) {
   } = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
-      title:    initialData?.title ?? "",
-      amount:   initialData?.amount ?? 0,
-      category: initialData?.category ?? "",
-      due_date: initialData?.due_date ?? "",
-      status:   initialData?.status ?? "pending",
-      notes:    initialData?.notes ?? "",
+      title:               initialData?.title ?? "",
+      amount:              initialData?.amount ?? 0,
+      category:            initialData?.category ?? "",
+      due_date:            initialData?.due_date ?? "",
+      status:              initialData?.status ?? "pending",
+      is_recurring:        initialData?.is_recurring ?? false,
+      recurrence_interval: initialData?.recurrence_interval ?? null,
+      notes:               initialData?.notes ?? "",
     },
   });
 
   const status = watch("status");
+  const isRecurring = watch("is_recurring");
+  const recurrenceInterval = watch("recurrence_interval");
 
   async function onSubmit(data: InvoiceFormData) {
     const url = isEdit ? `/api/invoices/${initialData.id}` : "/api/invoices";
     const method = isEdit ? "PATCH" : "POST";
+    const payload = {
+      ...data,
+      recurrence_interval: data.is_recurring ? data.recurrence_interval : null,
+    };
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
       const saved = await res.json();
@@ -127,6 +136,49 @@ export function InvoiceForm({ open, onClose, onSave, initialData }: Props) {
                   <SelectItem value="overdue">Vencida</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Recurrencia */}
+            <div className="col-span-2 rounded-lg border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Pago recurrente</p>
+                  <p className="text-xs text-muted-foreground">Se repite automáticamente</p>
+                </div>
+                <Switch
+                  checked={isRecurring}
+                  onCheckedChange={(v) => {
+                    setValue("is_recurring", v);
+                    if (!v) setValue("recurrence_interval", null);
+                  }}
+                />
+              </div>
+
+              {isRecurring && (
+                <div className="space-y-1">
+                  <Label>Frecuencia *</Label>
+                  <Select
+                    value={recurrenceInterval ?? ""}
+                    onValueChange={(v) =>
+                      setValue("recurrence_interval", v as InvoiceFormData["recurrence_interval"])
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="¿Cada cuánto se repite?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RECURRENCE_INTERVALS.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.recurrence_interval && (
+                    <p className="text-xs text-destructive">{errors.recurrence_interval.message}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="col-span-2 space-y-1">

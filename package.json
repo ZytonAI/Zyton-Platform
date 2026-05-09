@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.93.0",
     "@base-ui/react": "^1.4.1",
     "@hookform/resolvers": "^5.2.2",
+    "@radix-ui/react-switch": "^1.2.6",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.1",
     "class-variance-authority": "^0.7.1",

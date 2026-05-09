@@ -20,7 +20,8 @@ import {
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { InvoiceForm } from "./InvoiceForm";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Plus, MoreHorizontal, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, Search, RefreshCw } from "lucide-react";
+import { RECURRENCE_INTERVALS } from "@/lib/validations/invoice.schema";
 import { toast } from "sonner";
 import type { Invoice } from "@/types";
 
@@ -115,6 +116,7 @@ export function InvoicesClient({ initialInvoices }: Props) {
               <TableHead>Monto</TableHead>
               <TableHead>Categoría</TableHead>
               <TableHead>Fecha de pago</TableHead>
+              <TableHead>Recurrencia</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="w-10" />
             </TableRow>
@@ -123,7 +125,7 @@ export function InvoicesClient({ initialInvoices }: Props) {
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="text-center text-muted-foreground py-12"
                 >
                   {search
@@ -143,6 +145,16 @@ export function InvoicesClient({ initialInvoices }: Props) {
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {formatDate(invoice.due_date)}
+                  </TableCell>
+                  <TableCell>
+                    {invoice.is_recurring && invoice.recurrence_interval ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                        <RefreshCw className="w-3 h-3" />
+                        {RECURRENCE_INTERVALS.find((r) => r.value === invoice.recurrence_interval)?.label ?? invoice.recurrence_interval}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={invoice.status} type="invoice" />

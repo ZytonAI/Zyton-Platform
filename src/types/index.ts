@@ -132,6 +132,7 @@ export interface WebAnalysis {
 }
 
 export type InvoiceStatus = "pending" | "paid" | "overdue";
+export type RecurrenceInterval = "weekly" | "biweekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
 export type CalendarEventType = "event" | "task" | "deadline";
 export type CalendarEventStatus = "pending" | "done";
 
@@ -143,6 +144,8 @@ export interface Invoice {
   category: string | null;
   due_date: string;
   status: InvoiceStatus;
+  is_recurring: boolean;
+  recurrence_interval: RecurrenceInterval | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
