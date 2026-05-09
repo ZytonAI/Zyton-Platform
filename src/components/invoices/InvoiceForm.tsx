@@ -92,7 +92,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData }: Props) {
             <div className="space-y-1">
               <Label>Monto *</Label>
               <Input
-                {...register("amount")}
+                {...register("amount", { valueAsNumber: true })}
                 type="number"
                 step="0.01"
                 min="0"
