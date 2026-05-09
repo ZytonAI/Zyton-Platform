@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { TopBar } from "@/components/layout/TopBar";
+import { AgentsWrapper } from "@/components/agents/AgentsWrapper";
 
 export default async function AgentsPage() {
   const supabase = await createClient();
@@ -10,7 +11,7 @@ export default async function AgentsPage() {
   return (
     <>
       <TopBar title="Agentes IA" userEmail={user?.email} />
-      <div style={{ padding: "2rem" }}>Agents OK — paso 2 (TopBar + auth)</div>
+      <AgentsWrapper />
     </>
   );
 }
