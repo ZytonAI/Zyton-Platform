@@ -11,6 +11,8 @@ export interface Lead {
   status: LeadStatus;
   source: string | null;
   notes: string | null;
+  website: string | null;
+  maps_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -88,15 +90,40 @@ export interface WaSession {
   updated_at: string;
 }
 
-export interface AgentConfig {
-  id: string;
-  owner_id: string;
-  enabled: boolean;
+// ── Agent Pipeline ──────────────────────────────────────────
+export interface ApifyLead {
   name: string;
-  system_prompt: string;
-  model: string;
-  created_at: string;
-  updated_at: string;
+  phone: string | null;
+  website: string | null;
+  company: string | null;
+  maps_url: string | null;
+  category: string | null;
+}
+
+export type AgentEventType = "status" | "result" | "error" | "done";
+
+export interface AgentEvent {
+  type: AgentEventType;
+  message?: string;
+  leads?: Lead[];
+  saved?: number;
+  analysis?: WebAnalysis;
+  html?: string;
+  lead_id?: string;
+  report_url?: string;
+}
+
+export interface WebAnalysis {
+  nombre: string;
+  descripcion: string;
+  telefono: string | null;
+  email: string | null;
+  servicios: string[];
+  resumen: string;
+  puntaje_web: number;
+  velocidad: string;
+  metricas: { label: string; actual: number; benchmark: number }[];
+  oportunidades: string[];
 }
 
 export type InvoiceStatus = "pending" | "paid" | "overdue";
