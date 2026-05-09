@@ -19,6 +19,7 @@ interface Props {
 export function WaConnectPanel({ onConnected }: Props) {
   const [data, setData] = useState<StatusResponse>({ status: "disconnected", qr: null, phone: null });
   const [loading, setLoading] = useState(true);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const poll = useCallback(async () => {
     try {
@@ -37,6 +38,18 @@ export function WaConnectPanel({ onConnected }: Props) {
     poll();
     const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
+  }, [poll]);
+
+  const handleReconnect = useCallback(async () => {
+    setReconnecting(true);
+    try {
+      await fetch("/api/whatsapp/reconnect", { method: "POST" });
+      // Esperar un momento y luego hacer poll para obtener el nuevo estado
+      await new Promise((r) => setTimeout(r, 1500));
+      await poll();
+    } finally {
+      setReconnecting(false);
+    }
   }, [poll]);
 
   return (
@@ -62,7 +75,11 @@ export function WaConnectPanel({ onConnected }: Props) {
       ) : data.status === "connecting" ? (
         <>
           <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="text-muted-foreground">Conectando con WhatsApp...</p>
+          <p className="text-muted-foreground">Generando código QR...</p>
+          <Button variant="outline" onClick={handleReconnect} disabled={reconnecting} className="gap-2">
+            <RefreshCw className={`w-4 h-4 ${reconnecting ? "animate-spin" : ""}`} />
+            {reconnecting ? "Reiniciando..." : "No aparece el QR"}
+          </Button>
         </>
       ) : (
         <>
@@ -75,8 +92,9 @@ export function WaConnectPanel({ onConnected }: Props) {
               El servicio de WhatsApp no está disponible. Verifica que el servicio en tu VPS esté corriendo.
             </p>
           </div>
-          <Button variant="outline" onClick={poll} className="gap-2">
-            <RefreshCw className="w-4 h-4" /> Reintentar
+          <Button variant="outline" onClick={handleReconnect} disabled={reconnecting} className="gap-2">
+            <RefreshCw className={`w-4 h-4 ${reconnecting ? "animate-spin" : ""}`} />
+            {reconnecting ? "Iniciando..." : "Conectar WhatsApp"}
           </Button>
         </>
       )}
