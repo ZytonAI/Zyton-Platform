@@ -47,15 +47,19 @@ export function ChatClient({ initialStatus, initialConversations }: Props) {
   }, []);
 
   const [disconnecting, setDisconnecting] = useState(false);
+  const [justDisconnected, setJustDisconnected] = useState(false);
 
   const handleDisconnect = useCallback(async () => {
     setDisconnecting(true);
+    setJustDisconnected(true);
     setStatus("disconnected");
     setSelected(null);
     try {
       await fetch("/api/whatsapp/disconnect", { method: "POST" });
     } finally {
       setDisconnecting(false);
+      // Mantener suppressConnect activo 6s para que el bridge procese el logout
+      setTimeout(() => setJustDisconnected(false), 6000);
     }
   }, []);
 
@@ -70,7 +74,7 @@ export function ChatClient({ initialStatus, initialConversations }: Props) {
   if (status !== "connected") {
     return (
       <div className="h-full">
-        <WaConnectPanel onConnected={handleConnected} />
+        <WaConnectPanel onConnected={handleConnected} suppressConnect={justDisconnected} />
       </div>
     );
   }

@@ -7,14 +7,9 @@ export default async function ChatPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Estado de la sesión WA almacenado en Supabase
-  const { data: session } = await supabase
-    .from("wa_sessions")
-    .select("status")
-    .eq("owner_id", user!.id)
-    .single();
-
-  const initialStatus = (session?.status ?? "disconnected") as WaSessionStatus;
+  // Siempre arrancar en "disconnected" — WaConnectPanel hará el poll real al bridge
+  // y transicionará al chat si ya hay sesión activa. Evita leer status stale de Supabase.
+  const initialStatus: WaSessionStatus = "disconnected";
 
   // Conversaciones iniciales
   const { data: conversations } = await supabase

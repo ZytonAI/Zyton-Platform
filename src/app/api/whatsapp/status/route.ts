@@ -31,9 +31,12 @@ export async function GET() {
       .single();
 
     if (session) {
+      // Si el bridge no responde y Supabase dice "connected", no podemos verificarlo:
+      // devolver "disconnected" para no mostrar la vista de chat sin conexión real.
+      const fallbackStatus = session.status === "connected" ? "disconnected" : session.status;
       return NextResponse.json({
-        status: session.status,
-        phone: session.phone ?? null,
+        status: fallbackStatus,
+        phone: null,
         qr: session.qr_code ?? null,
       });
     }
