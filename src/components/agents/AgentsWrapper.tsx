@@ -1,50 +1,29 @@
 "use client";
 
-import { useEffect, useState, Component } from "react";
-import type { ReactNode } from "react";
-
-class LocalErrorBoundary extends Component<
-  { children: ReactNode },
-  { error: Error | null }
-> {
-  state = { error: null };
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{ padding: "2rem", color: "red", fontFamily: "monospace" }}>
-          <strong>CRASH en AgentsPageClient:</strong>
-          <pre style={{ marginTop: "1rem", whiteSpace: "pre-wrap", fontSize: "12px" }}>
-            {String(this.state.error)}
-            {"\n"}
-            {(this.state.error as Error).stack}
-          </pre>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+import { useEffect, useState } from "react";
 
 export function AgentsWrapper() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [Comp, setComp] = useState<any>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
     import("./AgentsPageClient")
       .then((m) => setComp(() => m.AgentsPageClient))
-      .catch((e) => console.error("import failed:", e));
+      .catch((e) => setImportError(String(e)));
   }, []);
+
+  if (importError) {
+    return (
+      <div style={{ padding: "2rem", color: "red", fontFamily: "monospace" }}>
+        Import error: {importError}
+      </div>
+    );
+  }
 
   if (!Comp) {
     return <div className="p-6 text-sm text-muted-foreground">Cargando agentes...</div>;
   }
 
-  return (
-    <LocalErrorBoundary>
-      <Comp />
-    </LocalErrorBoundary>
-  );
+  return <Comp />;
 }
