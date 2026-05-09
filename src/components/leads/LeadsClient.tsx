@@ -4,37 +4,76 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { StatusBadge } from "@/components/shared/StatusBadge";
 import { LeadForm } from "./LeadForm";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Plus, MoreHorizontal, Pencil, Trash2, Eye, Search } from "lucide-react";
+import {
+  Plus, Search, Phone, Globe, Building2,
+  MoreHorizontal, Pencil, Trash2, Eye,
+  Bot, FileText,
+} from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import type { Lead } from "@/types";
+import type { Lead, LeadStatus } from "@/types";
+import { cn } from "@/lib/utils";
 
-interface Props {
-  initialLeads: Lead[];
-}
+interface Props { initialLeads: Lead[] }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+const STATUS_LABELS: Record<LeadStatus, string> = {
+  new: "Nuevo",
+  contacted: "Contactado",
+  qualified: "Calificado",
+  lost: "Perdido",
+  converted: "Convertido",
+};
+
+const STATUS_COLORS: Record<LeadStatus, string> = {
+  new: "bg-blue-100 text-blue-700",
+  contacted: "bg-yellow-100 text-yellow-700",
+  qualified: "bg-emerald-100 text-emerald-700",
+  lost: "bg-red-100 text-red-700",
+  converted: "bg-purple-100 text-purple-700",
+};
+
+const FILTERS: { label: string; value: string }[] = [
+  { label: "Todos", value: "all" },
+  { label: "Nuevos", value: "new" },
+  { label: "Contactados", value: "contacted" },
+  { label: "Calificados", value: "qualified" },
+  { label: "De Raúl", value: "raul" },
+  { label: "Con informe", value: "analyzed" },
+];
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const d = Math.floor(diff / 86400000);
+  if (d === 0) return "hoy";
+  if (d === 1) return "ayer";
+  if (d < 7) return `hace ${d} días`;
+  if (d < 30) return `hace ${Math.floor(d / 7)} sem`;
+  return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
 }
 
 export function LeadsClient({ initialLeads }: Props) {
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [editLead, setEditLead] = useState<Lead | undefined>();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const filtered = leads.filter((l) =>
-    [l.name, l.company, l.email, l.phone].some((v) =>
-      v?.toLowerCase().includes(search.toLowerCase())
-    )
-  );
+  const filtered = leads.filter((l) => {
+    const matchSearch = [l.name, l.company, l.phone, l.email].some(
+      (v) => v?.toLowerCase().includes(search.toLowerCase())
+    );
+    const matchFilter =
+      filter === "all" ? true :
+      filter === "raul" ? l.source === "raul" :
+      filter === "analyzed" ? l.analyzed :
+      l.status === filter;
+    return matchSearch && matchFilter;
+  });
 
   function handleSaved(lead: Lead) {
     setLeads((prev) => {
@@ -60,76 +99,131 @@ export function LeadsClient({ initialLeads }: Props) {
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative max-w-sm flex-1">
+      {/* Top bar */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar leads..."
+            placeholder="Buscar..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-9"
           />
         </div>
-        <Button onClick={() => { setEditLead(undefined); setShowForm(true); }} className="gap-2 shrink-0">
+        <Button
+          size="sm"
+          className="gap-1.5 shrink-0"
+          onClick={() => { setEditLead(undefined); setShowForm(true); }}
+        >
           <Plus className="w-4 h-4" /> Nuevo lead
         </Button>
       </div>
 
-      <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-gray-50">
-              <TableHead>Nombre</TableHead>
-              <TableHead>Empresa</TableHead>
-              <TableHead>Contacto</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Creado</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-12">
-                  {search ? "Sin resultados para tu búsqueda" : "No hay leads aún. ¡Crea el primero!"}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((lead) => (
-                <TableRow key={lead.id} className="cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/leads/${lead.id}`)}>
-                  <TableCell className="font-medium">{lead.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{lead.company ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {lead.phone ?? lead.email ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={lead.status} type="lead" />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{formatDate(lead.created_at)}</TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push(`/leads/${lead.id}`)}>
-                          <Eye className="w-4 h-4 mr-2" /> Ver detalle
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => { setEditLead(lead); setShowForm(true); }}>
-                          <Pencil className="w-4 h-4 mr-2" /> Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive" onClick={() => setDeletingId(lead.id)}>
-                          <Trash2 className="w-4 h-4 mr-2" /> Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
+      {/* Filter pills */}
+      <div className="flex gap-2 flex-wrap">
+        {FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setFilter(f.value)}
+            className={cn(
+              "px-3 py-1 rounded-full text-xs font-medium transition-colors",
+              filter === f.value
+                ? "bg-gray-900 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             )}
-          </TableBody>
-        </Table>
+          >
+            {f.label}
+          </button>
+        ))}
+        <span className="ml-auto text-xs text-muted-foreground self-center">
+          {filtered.length} lead{filtered.length !== 1 ? "s" : ""}
+        </span>
       </div>
+
+      {/* Cards grid */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground text-sm">
+          {search || filter !== "all" ? "Sin resultados" : "No hay leads aún. ¡Crea el primero!"}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered.map((lead) => (
+            <div
+              key={lead.id}
+              onClick={() => router.push(`/leads/${lead.id}`)}
+              className="bg-white border rounded-xl p-4 cursor-pointer hover:shadow-md hover:border-gray-300 transition-all space-y-3 group"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-sm text-gray-900 truncate">{lead.name}</p>
+                  {lead.company && lead.company !== lead.name && (
+                    <p className="text-xs text-muted-foreground truncate">{lead.company}</p>
+                  )}
+                </div>
+                <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100 transition-all">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => router.push(`/leads/${lead.id}`)}>
+                        <Eye className="w-4 h-4 mr-2" /> Ver
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { setEditLead(lead); setShowForm(true); }}>
+                        <Pencil className="w-4 h-4 mr-2" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={() => setDeletingId(lead.id)}>
+                        <Trash2 className="w-4 h-4 mr-2" /> Eliminar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+
+              {/* Contact info */}
+              <div className="space-y-1">
+                {lead.phone && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Phone className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{lead.phone}</span>
+                  </div>
+                )}
+                {lead.website && lead.website !== "Sin página web" && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Globe className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{lead.website.replace(/^https?:\/\//, "")}</span>
+                  </div>
+                )}
+                {lead.notes && !lead.phone && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Building2 className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{lead.notes}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer badges */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-50">
+                <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", STATUS_COLORS[lead.status])}>
+                  {STATUS_LABELS[lead.status]}
+                </span>
+                {lead.source === "raul" && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600 flex items-center gap-1">
+                    <Bot className="w-2.5 h-2.5" /> Raúl
+                  </span>
+                )}
+                {lead.analyzed && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-600 flex items-center gap-1">
+                    <FileText className="w-2.5 h-2.5" /> Con informe
+                  </span>
+                )}
+                <span className="ml-auto text-xs text-muted-foreground">{timeAgo(lead.created_at)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <LeadForm
         open={showForm}
@@ -137,7 +231,6 @@ export function LeadsClient({ initialLeads }: Props) {
         onSave={handleSaved}
         initialData={editLead}
       />
-
       <ConfirmDialog
         open={!!deletingId}
         title="Eliminar lead"

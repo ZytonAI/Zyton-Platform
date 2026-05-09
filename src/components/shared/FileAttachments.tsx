@@ -62,13 +62,18 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
     }
   }
 
-  async function handleDownload(id: string, fileName: string) {
+  async function handleDownload(id: string, fileName: string, contentType?: string | null) {
     const res = await fetch(`/api/attachments/${id}`);
     const { url } = await res.json();
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    a.click();
+    // HTML reports open in new tab so user can print → Save as PDF
+    if (contentType === "text/html" || fileName.endsWith(".html")) {
+      window.open(url, "_blank");
+    } else {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+    }
   }
 
   async function handleDelete(id: string) {
@@ -107,10 +112,15 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
               <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{file.file_name}</p>
-                <p className="text-xs text-muted-foreground">{formatSize(file.size_bytes)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {file.content_type === "text/html"
+                    ? "Informe — abrir e imprimir como PDF"
+                    : formatSize(file.size_bytes)}
+                </p>
               </div>
               <div className="flex gap-1 shrink-0">
-                <Button size="icon" variant="ghost" className="w-7 h-7" onClick={() => handleDownload(file.id, file.file_name)}>
+                <Button size="icon" variant="ghost" className="w-7 h-7"
+                  onClick={() => handleDownload(file.id, file.file_name, file.content_type)}>
                   <Download className="w-3.5 h-3.5" />
                 </Button>
                 <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => handleDelete(file.id)}>
