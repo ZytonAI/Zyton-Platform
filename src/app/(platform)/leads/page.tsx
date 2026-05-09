@@ -5,10 +5,15 @@ import type { Lead } from "@/types";
 
 export default async function LeadsPage() {
   const supabase = await createClient();
-  const [{ data: { user } }, { data: leads }] = await Promise.all([
+  const [{ data: { user } }, { data: allLeads }] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from("leads").select("*").order("created_at", { ascending: false }),
   ]);
+
+  // Ocultar leads de Raúl que tienen web pero Elisa aún no ha generado su informe
+  const leads = (allLeads ?? []).filter(
+    (l) => l.source !== "raul" || l.analyzed || l.website === "Sin página web"
+  );
 
   return (
     <>
