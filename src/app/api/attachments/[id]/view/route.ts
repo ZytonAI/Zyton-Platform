@@ -11,24 +11,41 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: attachment } = await supabase
+  const { data: attachment, error: dbErr } = await supabase
     .from("file_attachments")
     .select("storage_path, content_type")
     .eq("id", id)
     .single();
 
-  if (!attachment) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (dbErr || !attachment) {
+    return NextResponse.json({ error: "Adjunto no encontrado", detail: dbErr?.message }, { status: 404 });
+  }
 
   const admin = createAdminClient();
-  const { data: blob, error } = await admin.storage
+
+  // Create a short-lived signed URL and fetch the content server-side
+  const { data: signed, error: signErr } = await admin.storage
     .from("attachments")
-    .download(attachment.storage_path);
+    .createSignedUrl(attachment.storage_path, 120);
 
-  if (error || !blob) return NextResponse.json({ error: "Error descargando archivo" }, { status: 500 });
+  if (signErr || !signed?.signedUrl) {
+    return NextResponse.json(
+      { error: "No se pudo generar URL", detail: signErr?.message, path: attachment.storage_path },
+      { status: 500 }
+    );
+  }
 
-  const content = await blob.text();
+  const fileRes = await fetch(signed.signedUrl);
+  if (!fileRes.ok) {
+    return NextResponse.json(
+      { error: "Error obteniendo archivo", status: fileRes.status, url: signed.signedUrl },
+      { status: 500 }
+    );
+  }
 
-  return new Response(content, {
+  const html = await fileRes.text();
+
+  return new Response(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
