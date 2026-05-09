@@ -22,41 +22,78 @@ async function scrapeWithJina(url: string): Promise<string> {
 async function analyzeWithOpenAI(url: string, content: string, nombre: string): Promise<WebAnalysis> {
   const completion = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
-    max_tokens: 1200,
+    max_tokens: 2000,
     response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
-        content:
-          "Eres un experto en marketing digital y UX. Responde ÚNICAMENTE con JSON válido, sin explicaciones adicionales.",
+        content: `Eres un consultor senior de marketing digital y UX con 10 años de experiencia ayudando a negocios locales en Latinoamérica a mejorar su presencia online.
+Tu especialidad es encontrar oportunidades específicas y accionables que otros pasan por alto.
+Responde ÚNICAMENTE con JSON válido. Nunca uses frases genéricas — cada observación debe ser específica para ESTE negocio.`,
       },
       {
         role: "user",
-        content: `Analiza el sitio web del negocio "${nombre}" (${url}) y genera un diagnóstico de presencia web.
+        content: `Analiza en profundidad el sitio web de "${nombre}" (${url}).
 
-Contenido extraído:
-${content.slice(0, 6000)}
+CONTENIDO EXTRAÍDO DEL SITIO:
+${content.slice(0, 9000)}
 
-Devuelve este JSON exacto:
+---
+INSTRUCCIONES DE ANÁLISIS:
+
+Estudia el contenido y responde estas preguntas en tu análisis:
+• ¿Qué servicios/productos específicos ofrece este negocio? ¿Cómo los presenta?
+• ¿Tiene botón de WhatsApp, formulario de contacto, reservas o citas online?
+• ¿Hay testimonios, reseñas de clientes, casos de éxito o certificaciones visibles?
+• ¿La página de inicio comunica claramente el valor diferencial del negocio?
+• ¿Tiene blog, contenido educativo o recursos que generen tráfico orgánico?
+• ¿Los precios o tarifas son visibles? ¿Hay promociones activas?
+• ¿Las imágenes del sitio parecen profesionales o genéricas/de stock?
+• ¿Qué tan fácil es para un usuario nuevo contactarlos o agendar una cita?
+• ¿Detectas señales de optimización móvil en la estructura del contenido?
+• ¿El sitio tiene presencia en redes sociales vinculada (Instagram, Facebook, etc.)?
+
+CALIFICACIÓN DE MÉTRICAS (0-100, siendo realista):
+- SEO Local: ¿aparecen palabras clave de su sector y ciudad? ¿título y descripciones optimizados?
+- Captación de Clientes: ¿qué tan fácil es para un visitante convertirse en cliente? (CTAs, formularios, WhatsApp)
+- Contenido y Confianza: ¿hay testimonios, fotos reales, información del equipo, trayectoria?
+- Experiencia de Usuario: ¿la navegación es clara? ¿la información está bien organizada?
+
+Benchmark sector para negocios locales: SEO Local=72, Captación=68, Contenido=65, UX=70
+
+PUNTAJE WEB GENERAL: Promedio ponderado de las 4 métricas anteriores.
+
+VELOCIDAD: Estima basándote en la complejidad del sitio (muchas imágenes/scripts = más lento):
+- Sitio simple, poco contenido: "1.8s - 2.5s"
+- Sitio medio: "3.0s - 4.5s"
+- Sitio pesado con muchos elementos: "5.0s - 8.0s"
+
+OPORTUNIDADES: Deben ser 4-5 oportunidades MUY ESPECÍFICAS para este negocio.
+Formato: "[Problema concreto observado] → [Solución específica] → [Impacto esperado para este tipo de negocio]"
+Ejemplo bueno: "No hay botón de WhatsApp visible en la página principal → Agregar un botón flotante de WhatsApp con mensaje predefinido 'Hola, quiero información sobre sus servicios' → Puede aumentar los contactos directos un 40% ya que el 78% de usuarios prefiere WhatsApp para consultas iniciales"
+Ejemplo malo: "Mejorar el SEO" (demasiado genérico)
+
+Devuelve EXACTAMENTE este JSON:
 {
-  "nombre": "${nombre}",
-  "descripcion": "descripción del negocio en 1 oración",
-  "telefono": "número o null",
-  "email": "email o null",
-  "servicios": ["servicio1", "servicio2"],
-  "resumen": "2-3 oraciones específicas sobre el estado de su presencia web, mencionando fortalezas y debilidades concretas observadas en el sitio",
-  "puntaje_web": 45,
-  "velocidad": "4.2s",
+  "nombre": "nombre real del negocio tal como aparece en el sitio",
+  "descripcion": "1 oración específica de qué hace este negocio y para quién",
+  "telefono": "número si aparece en el sitio o null",
+  "email": "email si aparece o null",
+  "servicios": ["servicio específico 1", "servicio específico 2", "servicio específico 3"],
+  "resumen": "3-4 oraciones detalladas y específicas. Menciona elementos REALES encontrados: ej. 'El sitio de [nombre] presenta [X servicios] con [descripción de cómo los muestra], sin embargo carece de [elementos específicos que faltan]. [Observación sobre la experiencia del usuario]. [Conclusión sobre el potencial de mejora].'",
+  "puntaje_web": 52,
+  "velocidad": "3.8s",
   "metricas": [
-    {"label": "Velocidad", "actual": 45, "benchmark": 85},
-    {"label": "SEO", "actual": 30, "benchmark": 80},
-    {"label": "Móvil", "actual": 40, "benchmark": 90},
-    {"label": "Diseño", "actual": 50, "benchmark": 75}
+    {"label": "SEO Local", "actual": 45, "benchmark": 72},
+    {"label": "Captación Clientes", "actual": 38, "benchmark": 68},
+    {"label": "Contenido y Confianza", "actual": 55, "benchmark": 65},
+    {"label": "Experiencia Usuario", "actual": 60, "benchmark": 70}
   ],
   "oportunidades": [
-    "Oportunidad concreta 1 basada en el contenido del sitio",
-    "Oportunidad concreta 2",
-    "Oportunidad concreta 3"
+    "Oportunidad específica 1 con problema → solución → impacto",
+    "Oportunidad específica 2",
+    "Oportunidad específica 3",
+    "Oportunidad específica 4"
   ]
 }`,
       },

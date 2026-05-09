@@ -4,15 +4,20 @@ function buildBars(metricas: WebAnalysis["metricas"]): string {
   return metricas
     .map(
       (m) => `
-    <div style="margin-bottom:18px">
+    <div style="margin-bottom:20px">
       <div class="bar-label">${m.label}</div>
-      <div class="bar-track">
-        <span class="bar-fill bar-benchmark" style="width:${m.benchmark}%"></span>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+        <div class="bar-track" style="flex:1">
+          <span class="bar-fill bar-benchmark" style="width:${m.benchmark}%"></span>
+        </div>
+        <span class="bar-pct" style="width:32px;text-align:right">${m.benchmark}%</span>
       </div>
-      <div class="bar-track">
-        <span class="bar-fill bar-actual" style="width:${m.actual}%"></span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="bar-track" style="flex:1">
+          <span class="bar-fill bar-actual" style="width:${m.actual}%"></span>
+        </div>
+        <span class="bar-pct" style="width:32px;text-align:right">${m.actual}%</span>
       </div>
-      <div class="bar-pct">Tu sitio: ${m.actual}% &nbsp;·&nbsp; Benchmark: ${m.benchmark}%</div>
     </div>`
     )
     .join("");
@@ -35,57 +40,105 @@ export function generateReportHtml(analysis: WebAnalysis, ciudad: string): strin
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <title>Informe — ${analysis.nombre}</title>
   <style>
     @page { size: A4; margin: 0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 210mm; height: 297mm; overflow: hidden; }
-    body { font-family: 'Roboto', sans-serif; background: #FFFFFF; color: #1A1A1A; display: flex; flex-direction: column; }
 
+    /* ── Browser view: natural scroll ── */
+    html { background: #e8eaf0; }
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #FFFFFF;
+      color: #1A1A1A;
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    }
+
+    /* ── Print: exact A4, no shadow ── */
+    @media print {
+      html { background: #fff; }
+      body { box-shadow: none; width: 210mm; height: 297mm; overflow: hidden; margin: 0; }
+      .print-btn { display: none !important; }
+    }
+
+    /* ── Print button ── */
+    .print-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 999;
+      background: #1a2d4f;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(26,45,79,0.4);
+    }
+    .print-btn:hover { background: #2e5fa3; }
+
+    /* ── Layout ── */
     .header { flex-shrink: 0; padding: 16px 32px; background: #FFFFFF; border-bottom: 3px solid #1a2d4f; display: flex; justify-content: space-between; align-items: center; }
     .header-brand { font-family: 'Poppins', sans-serif; font-size: 20px; font-weight: 700; color: #1a2d4f; letter-spacing: 2px; }
     .header-tagline { font-family: 'Poppins', sans-serif; font-size: 9px; color: #1a2d4f; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.65; }
 
     .title-bar { flex-shrink: 0; background: #1a2d4f; color: #FFFFFF; padding: 20px 32px; }
     .title-bar h1 { font-family: 'Poppins', sans-serif; font-size: 18px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
-    .title-bar .subtitle { font-size: 12px; margin-top: 5px; opacity: 0.80; letter-spacing: 0.3px; }
+    .title-bar .subtitle { font-size: 12px; margin-top: 5px; opacity: 0.80; }
 
-    .two-col { flex: 1; display: flex; min-height: 0; }
+    .two-col { flex: 1; display: flex; min-height: 180px; }
     .col-left { flex: 0 0 55%; padding: 28px 32px; display: flex; flex-direction: column; background: #FFFFFF; border-right: 2px solid #e0e6ef; }
     .col-right { flex: 1; padding: 28px 28px; display: flex; flex-direction: column; background: #F5F6F8; }
 
     .section-title { font-family: 'Poppins', sans-serif; font-size: 9.5px; font-weight: 700; color: #1a2d4f; text-transform: uppercase; letter-spacing: 2.5px; margin-bottom: 14px; padding-bottom: 7px; border-bottom: 2px solid #1a2d4f; }
 
-    .resumen-text { font-size: 12px; color: #1A1A1A; line-height: 1.7; }
+    .resumen-text { font-size: 11.5px; color: #1A1A1A; line-height: 1.75; flex: 1; }
 
-    .metric-boxes { display: flex; gap: 10px; margin-top: 24px; }
-    .metric-box { flex: 1; background: #1a2d4f; color: #FFFFFF; padding: 18px 20px; border-radius: 5px; }
-    .metric-value { font-family: 'Poppins', sans-serif; font-size: 30px; font-weight: 700; line-height: 1; color: #FFFFFF; }
-    .metric-label { font-size: 9px; margin-top: 6px; opacity: 0.80; text-transform: uppercase; letter-spacing: 1px; color: #FFFFFF; }
+    .metric-boxes { display: flex; gap: 10px; margin-top: 20px; }
+    .metric-box { flex: 1; background: #1a2d4f; color: #FFFFFF; padding: 14px 16px; border-radius: 6px; }
+    .metric-value { font-family: 'Poppins', sans-serif; font-size: 26px; font-weight: 700; line-height: 1; }
+    .metric-label { font-size: 8.5px; margin-top: 5px; opacity: 0.80; text-transform: uppercase; letter-spacing: 1px; }
 
-    .chart-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
-    .bar-label { font-family: 'Poppins', sans-serif; font-size: 11px; font-weight: 600; color: #1a2d4f; margin-bottom: 5px; }
-    .bar-track { background: #dde4ef; height: 10px; border-radius: 3px; margin-bottom: 4px; overflow: hidden; }
-    .bar-fill { height: 10px; border-radius: 3px; display: block; }
+    .bar-label { font-family: 'Poppins', sans-serif; font-size: 10.5px; font-weight: 600; color: #1a2d4f; margin-bottom: 5px; }
+    .bar-track { background: #dde4ef; height: 9px; border-radius: 3px; overflow: hidden; }
+    .bar-fill { height: 9px; border-radius: 3px; display: block; }
     .bar-actual { background: #1a2d4f; }
-    .bar-benchmark { background: #2e5fa3; opacity: 0.45; }
-    .bar-pct { font-size: 9.5px; color: #6B7280; }
+    .bar-benchmark { background: #2e5fa3; opacity: 0.40; }
+    .bar-pct { font-size: 9px; color: #6B7280; }
 
     .chart-legend { display: flex; gap: 16px; margin-top: 16px; }
-    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: #6B7280; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 9px; color: #6B7280; }
     .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 
-    .opportunities { flex-shrink: 0; padding: 24px 32px; background: #FFFFFF; border-top: 2px solid #e0e6ef; }
+    .opportunities { flex-shrink: 0; padding: 22px 32px; background: #FFFFFF; border-top: 2px solid #e0e6ef; }
     .opp-list { list-style: none; margin-top: 10px; }
-    .opp-list li { font-size: 11.5px; color: #1A1A1A; line-height: 1.5; padding: 11px 0 11px 20px; border-bottom: 1px solid #eaeff5; position: relative; }
+    .opp-list li { font-size: 11px; color: #1A1A1A; line-height: 1.6; padding: 10px 0 10px 22px; border-bottom: 1px solid #eaeff5; position: relative; }
     .opp-list li:last-child { border-bottom: none; }
     .opp-list li::before { content: ""; position: absolute; left: 0; top: 16px; width: 7px; height: 7px; border-radius: 50%; background: #1a2d4f; }
 
-    .footer { flex-shrink: 0; background: #1a2d4f; color: #FFFFFF; padding: 13px 32px; display: flex; justify-content: space-between; align-items: center; }
-    .footer span { font-size: 10px; opacity: 0.75; }
+    .footer { flex-shrink: 0; background: #1a2d4f; color: #FFFFFF; padding: 12px 32px; display: flex; justify-content: space-between; align-items: center; }
+    .footer span { font-size: 9.5px; opacity: 0.75; }
   </style>
 </head>
 <body>
+
+  <button class="print-btn" onclick="window.print()">
+    ⬇ Descargar PDF
+  </button>
+
   <div class="header">
     <span class="header-brand">ZYTON AI</span>
     <span class="header-tagline">Inteligencia Artificial para Negocios</span>
@@ -113,7 +166,7 @@ export function generateReportHtml(analysis: WebAnalysis, ciudad: string): strin
     </div>
     <div class="col-right">
       <div class="section-title">Comparativa del Sector</div>
-      <div class="chart-area">
+      <div style="flex:1">
         ${graficoBars}
       </div>
       <div class="chart-legend">
@@ -121,7 +174,7 @@ export function generateReportHtml(analysis: WebAnalysis, ciudad: string): strin
           <span class="legend-dot" style="background:#1a2d4f;"></span>Tu sitio
         </div>
         <div class="legend-item">
-          <span class="legend-dot" style="background:#2e5fa3; opacity:0.6;"></span>Benchmark sector
+          <span class="legend-dot" style="background:#2e5fa3;opacity:0.6;"></span>Benchmark sector
         </div>
       </div>
     </div>
@@ -138,6 +191,7 @@ export function generateReportHtml(analysis: WebAnalysis, ciudad: string): strin
     <span>zytonai.com &nbsp;·&nbsp; contacto@zytonai.com</span>
     <span>Informe preparado por Zyton AI &nbsp;·&nbsp; ${periodo}</span>
   </div>
+
 </body>
 </html>`;
 }
