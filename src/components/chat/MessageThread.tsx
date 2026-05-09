@@ -32,6 +32,17 @@ export function MessageThread({ conversation }: Props) {
     setLoading(false);
   }, [conversation.id]);
 
+  const refreshMessages = useCallback(async () => {
+    const res = await fetch(`/api/whatsapp/conversations/${conversation.id}/messages`);
+    if (res.ok) {
+      const fresh: Message[] = await res.json();
+      setMessages((prev) => {
+        if (fresh.length === prev.length) return prev;
+        return fresh;
+      });
+    }
+  }, [conversation.id]);
+
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
@@ -60,6 +71,12 @@ export function MessageThread({ conversation }: Props) {
 
     return () => { supabase.removeChannel(channel); };
   }, [conversation.id, supabase]);
+
+  // Polling de fallback: si Realtime falla, los mensajes aparecen igual
+  useEffect(() => {
+    const interval = setInterval(refreshMessages, 5000);
+    return () => clearInterval(interval);
+  }, [refreshMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

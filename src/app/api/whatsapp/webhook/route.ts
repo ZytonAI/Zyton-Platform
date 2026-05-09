@@ -16,14 +16,17 @@ export async function POST(request: Request) {
 
   const supabase = createAdminClient();
 
+  // Buscar la sesión más reciente sin requerir status="connected"
+  // El status puede estar momentáneamente desfasado durante reconexiones
   const { data: session } = await supabase
     .from("wa_sessions")
     .select("owner_id")
-    .eq("status", "connected")
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .single();
 
   if (!session) {
-    return NextResponse.json({ error: "No hay sesion WA activa" }, { status: 503 });
+    return NextResponse.json({ error: "No hay sesion WA registrada" }, { status: 503 });
   }
 
   const owner_id = session.owner_id;
