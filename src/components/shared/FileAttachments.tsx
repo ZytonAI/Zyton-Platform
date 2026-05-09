@@ -63,12 +63,12 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
   }
 
   async function handleDownload(id: string, fileName: string, contentType?: string | null) {
-    const res = await fetch(`/api/attachments/${id}`);
-    const { url } = await res.json();
-    // HTML reports open in new tab so user can print → Save as PDF
     if (contentType === "text/html" || fileName.endsWith(".html")) {
-      window.open(url, "_blank");
+      // Serve via our own route to avoid Supabase Storage CORS/security headers
+      window.open(`/api/attachments/${id}/view`, "_blank");
     } else {
+      const res = await fetch(`/api/attachments/${id}`);
+      const { url } = await res.json();
       const a = document.createElement("a");
       a.href = url;
       a.download = fileName;
