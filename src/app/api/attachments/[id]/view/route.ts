@@ -13,38 +13,44 @@ export async function GET(
 
   const { data: attachment, error: dbErr } = await supabase
     .from("file_attachments")
-    .select("storage_path, content_type")
+    .select("storage_path, content_type, content")
     .eq("id", id)
     .single();
 
   if (dbErr || !attachment) {
-    return NextResponse.json({ error: "Adjunto no encontrado", detail: dbErr?.message }, { status: 404 });
+    return NextResponse.json({ error: "Adjunto no encontrado" }, { status: 404 });
+  }
+
+  // Fast path: content stored directly in DB
+  if (attachment.content) {
+    return new Response(attachment.content as string, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  // Fallback: fetch from Supabase Storage (legacy records)
+  if (!attachment.storage_path) {
+    return NextResponse.json({ error: "Sin contenido disponible" }, { status: 404 });
   }
 
   const admin = createAdminClient();
-
-  // Create a short-lived signed URL and fetch the content server-side
   const { data: signed, error: signErr } = await admin.storage
     .from("attachments")
     .createSignedUrl(attachment.storage_path, 120);
 
   if (signErr || !signed?.signedUrl) {
-    return NextResponse.json(
-      { error: "No se pudo generar URL", detail: signErr?.message, path: attachment.storage_path },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error generando URL de Storage", detail: signErr?.message }, { status: 500 });
   }
 
   const fileRes = await fetch(signed.signedUrl);
   if (!fileRes.ok) {
-    return NextResponse.json(
-      { error: "Error obteniendo archivo", status: fileRes.status, url: signed.signedUrl },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Archivo no encontrado en Storage" }, { status: 404 });
   }
 
   const html = await fileRes.text();
-
   return new Response(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",

@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getOpenAI } from "@/lib/openai-client";
 import { generateReportHtml } from "@/lib/report-template";
 import { NextResponse } from "next/server";
@@ -81,7 +80,6 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       const emit = (data: object) => send(controller, encoder, data);
-      const admin = createAdminClient();
 
       try {
         // Cargar leads pendientes: de Raúl, con web, no analizados
@@ -136,35 +134,23 @@ export async function POST(request: Request) {
             const ciudad = lead.notes ?? "Colombia";
             const html = generateReportHtml(analysis, ciudad);
 
-            // Upload HTML to Supabase Storage
-            const timestamp = Date.now();
+            // Save HTML content directly in DB (no Storage bucket needed)
             const slug = lead.website
               .replace(/https?:\/\//, "")
               .replace(/[^a-z0-9]/gi, "-")
               .slice(0, 40);
-            const storagePath = `${user.id}/leads/${slug}_${timestamp}.html`;
-            const htmlBytes = new TextEncoder().encode(html);
-
-            await admin.storage
-              .from("attachments")
-              .upload(storagePath, htmlBytes, { contentType: "text/html", upsert: false });
-
-            // Create attachment record
             const fileName = `informe-${slug}.html`;
+
             await supabase.from("file_attachments").insert({
               owner_id: user.id,
               entity_type: "lead",
               entity_id: lead.id,
               file_name: fileName,
-              storage_path: storagePath,
+              storage_path: "",          // no storage path needed
               content_type: "text/html",
-              size_bytes: htmlBytes.byteLength,
+              size_bytes: new TextEncoder().encode(html).byteLength,
+              content: html,             // HTML stored directly in DB
             });
-
-            // Get signed URL
-            const { data: signed } = await admin.storage
-              .from("attachments")
-              .createSignedUrl(storagePath, 3600);
 
             // Mark lead as analyzed
             await supabase
@@ -177,7 +163,7 @@ export async function POST(request: Request) {
               id: lead.id,
               name: lead.name,
               puntaje: analysis.puntaje_web,
-              report_url: signed?.signedUrl ?? null,
+              report_url: null,
               html,
             });
 
