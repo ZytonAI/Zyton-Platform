@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { openai } from "@/lib/openai-client";
+import { getOpenAI } from "@/lib/openai-client";
 import { generateReportHtml } from "@/lib/report-template";
 import { NextResponse } from "next/server";
 import type { WebAnalysis } from "@/types";
@@ -21,7 +21,7 @@ async function scrapeWithJina(url: string): Promise<string> {
 }
 
 async function analyzeWithOpenAI(url: string, content: string, nombre: string): Promise<WebAnalysis> {
-  const completion = await openai.chat.completions.create({
+  const completion = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     max_tokens: 1200,
     response_format: { type: "json_object" },
