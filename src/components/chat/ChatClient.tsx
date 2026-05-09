@@ -6,7 +6,8 @@ import { ConversationList } from "./ConversationList";
 import { MessageThread } from "./MessageThread";
 import { WaConnectPanel } from "./WaConnectPanel";
 import type { Conversation, WaSessionStatus } from "@/types";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   initialStatus: WaSessionStatus;
@@ -45,6 +46,19 @@ export function ChatClient({ initialStatus, initialConversations }: Props) {
     setStatus("connected");
   }, []);
 
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const handleDisconnect = useCallback(async () => {
+    setDisconnecting(true);
+    try {
+      await fetch("/api/whatsapp/disconnect", { method: "POST" });
+      setStatus("disconnected");
+      setSelected(null);
+    } finally {
+      setDisconnecting(false);
+    }
+  }, []);
+
   const handleNewConversation = useCallback((conv: Conversation) => {
     setConversations((prev) => {
       const exists = prev.find((c) => c.id === conv.id);
@@ -65,12 +79,26 @@ export function ChatClient({ initialStatus, initialConversations }: Props) {
     <div className="flex h-full">
       {/* Panel izquierdo — lista de conversaciones */}
       <div className="w-80 shrink-0 flex flex-col">
-        <ConversationList
-          conversations={conversations}
-          selectedId={selected?.id ?? null}
-          onSelect={setSelected}
-          onNewConversation={handleNewConversation}
-        />
+        <div className="flex-1 min-h-0">
+          <ConversationList
+            conversations={conversations}
+            selectedId={selected?.id ?? null}
+            onSelect={setSelected}
+            onNewConversation={handleNewConversation}
+          />
+        </div>
+        <div className="p-3 border-t">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+          >
+            <LogOut className="w-4 h-4" />
+            {disconnecting ? "Cerrando sesión..." : "Cerrar sesión de WhatsApp"}
+          </Button>
+        </div>
       </div>
 
       {/* Panel derecho — hilo de mensajes */}

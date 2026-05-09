@@ -19,6 +19,12 @@ export async function getBridgeStatus() {
   return res.json() as Promise<{ status: string; qr: string | null; phone: string | null }>;
 }
 
+export async function disconnectBridge() {
+  const res = await bridgeFetch("/disconnect", { method: "POST" });
+  if (!res.ok) throw new Error(`Bridge error ${res.status}`);
+  return res.json() as Promise<{ ok: boolean }>;
+}
+
 export async function sendBridgeMessage(to: string, body: string) {
   const res = await bridgeFetch("/send", {
     method: "POST",
