@@ -200,20 +200,23 @@ function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
   const loadStats = useCallback(async () => {
     try {
       const supabase = createClient();
-      const base = supabase.from("leads").select("*", { count: "exact", head: true })
-        .eq("source", "raul");
 
-      const [pendingRes, doneRes, noWebRes] = await Promise.all([
-        base.eq("analyzed", false).not("website", "is", null).neq("website", "Sin página web"),
-        base.eq("analyzed", true),
-        base.eq("analyzed", false).or("website.is.null,website.eq.Sin página web"),
+      // 3 queries independientes — sin reusar el builder para evitar bugs de chaining
+      const [pendingRes, doneRes, totalPendingRes] = await Promise.all([
+        supabase.from("leads").select("*", { count: "exact", head: true })
+          .eq("source", "raul").eq("analyzed", false)
+          .not("website", "is", null).neq("website", "Sin página web"),
+        supabase.from("leads").select("*", { count: "exact", head: true })
+          .eq("source", "raul").eq("analyzed", true),
+        supabase.from("leads").select("*", { count: "exact", head: true })
+          .eq("source", "raul").eq("analyzed", false),
       ]);
 
-      setStats({
-        pending: pendingRes.count ?? 0,
-        done: doneRes.count ?? 0,
-        noWeb: noWebRes.count ?? 0,
-      });
+      const pending = pendingRes.count ?? 0;
+      const done = doneRes.count ?? 0;
+      const noWeb = Math.max(0, (totalPendingRes.count ?? 0) - pending);
+
+      setStats({ pending, done, noWeb });
     } catch {
       setStats({ pending: 0, done: 0, noWeb: 0 });
     }
