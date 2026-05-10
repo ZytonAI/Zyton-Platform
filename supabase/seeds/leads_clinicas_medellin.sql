@@ -1,8 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────
 -- LEADS: Clínicas odontológicas Medellín
 -- Pega esto en Supabase → SQL Editor y ejecuta.
--- El owner_id se toma automáticamente del primer usuario registrado.
--- Si tienes varios usuarios, reemplaza la subconsulta por tu UUID.
+-- Si ya ejecutaste la versión anterior, usa el bloque UPDATE al final.
 -- ─────────────────────────────────────────────────────────────────
 
 DO $$
@@ -13,13 +12,15 @@ BEGIN
 INSERT INTO public.leads
   (owner_id, name, phone, website, company, status, source, priority)
 VALUES
--- ── PRIORIDAD ALTA (tienen página web) ──────────────────────────
+-- ── PRIORIDAD ALTA (primeros 32) ────────────────────────────────
 (uid, 'Dental Specialists Medellín',                            '573007008281', 'https://dentalmedellin.com/',                                          'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Clínica Viena / Veneers Medellín',                      '573224776418', 'https://clinicaviena.com/',                                            'Dentista cosmético',                 'new', 'import', 'alta'),
 (uid, 'W SMILE premium dental practice',                        '573226780602', 'http://www.wsmile.com.co/',                                            'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Dra. Erika Diaz Odontología Estética e Integral',        '573012352198', 'https://bjored.my.canva.site/erikadiazodontologia',                    'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Ortoclin Sede Santa Lucia',                              '573134555223', 'https://www.instagram.com/ortoclin.col/',                              'Clínica dental',                     'new', 'import', 'alta'),
+(uid, 'Odontología Especializada Medellín',                     '573007008281', NULL,                                                                   'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Clínica Odontológica de Antioquia - CLODAN sas.',        '573192746973', 'https://clodan.com.co/',                                               'Clínica dental',                     'new', 'import', 'alta'),
+(uid, 'Odontologos en Medellín',                                '573052581651', NULL,                                                                   'Dentista',                           'new', 'import', 'alta'),
 (uid, 'Dr. Mauricio Arias - Odontólogo Experto English Dentist','573006705124', 'https://mauricioariasexperience.com/',                                 'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Lina Fernández Odontología - Diseño de sonrisa',         '573242910840', 'http://linafernandez.co/',                                             'Dentista',                           'new', 'import', 'alta'),
 (uid, 'Ortounion Clínica Odontológica',                         '573117678677', 'https://www.ortounion.com/',                                           'Clínica dental',                     'new', 'import', 'alta'),
@@ -30,6 +31,7 @@ VALUES
 (uid, 'DentiSalud El Poblado - Clínicas Odontológicas',         '573043495900', 'http://www.dentisalud.com.co/',                                        'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Urgencias Odontológicas 24 horas las Vegas',             '573044608222', 'https://uev.com.co/',                                                  'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Dentioral - Sede Poblado',                               '573044448911', 'https://dentioral.com/',                                               'Clínica dental',                     'new', 'import', 'alta'),
+(uid, 'Dra. Ángela Giraldo',                                    '573022200401', NULL,                                                                   NULL,                                 'new', 'import', 'alta'),
 (uid, 'Jenny Villada Clínicas Odontológicas',                   '573164112289', 'https://artistasdesonrisas.com/es/',                                   'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Royal Dental Care',                                      '573208201361', 'http://royaldentalcare.co/',                                           'Dentista',                           'new', 'import', 'alta'),
 (uid, 'Oral Studio',                                            '573127093687', 'https://www.oralstudio.com.co/',                                       'Clínica dental',                     'new', 'import', 'alta'),
@@ -40,28 +42,63 @@ VALUES
 (uid, 'Smile Natural Studio - Clínica & Spa Odontológico',      '573006370177', 'https://smilenaturalstudio.com/',                                      'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Dental Expertos',                                        '573008938020', 'https://www.instagram.com/dentalexpertos',                             'Clínica dental',                     'new', 'import', 'alta'),
 (uid, 'Clínica Unilaser',                                       '573012792874', 'https://clinicaunilaser.com/',                                         'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'Clínica Dental Home - Sede Poblado',                     '573104163897', 'https://clinicadentalhome.com/',                                       'Clínica dental',                     'new', 'import', 'alta'),
+(uid, 'Clínica Dental Home',                                    '573104163897', 'https://clinicadentalhome.com/',                                       'Clínica dental',                     'new', 'import', 'alta'),
+(uid, 'Oralprado',                                              '573122172282', NULL,                                                                   'Ortodoncista',                       'new', 'import', 'alta'),
 (uid, 'Premium Dental Medellín',                                '573204010740', 'http://premiumdentalmedellin.com/',                                    'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'Dental Sonrisas',                                        '573012642772', 'https://instagram.com/dentalsonrisasyp',                               'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'Clínica Dental Home - Sede 2',                           '573104194654', 'https://clinicadentalhome.com/',                                       'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'Oralimagen - Dental Implants',                           '573167449425', 'http://www.oralimagen.com/',                                           'Periodoncista de implantes dentales', 'new', 'import', 'alta'),
-(uid, 'Odontoss Laureles',                                      '573044440062', 'http://www.odontoss.com/',                                             'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'Naturaldent',                                            '573115410224', 'https://www.instagram.com/naturaldento',                               'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'OdontoestéticaDH',                                       '573053222670', 'http://odontosteticadh.com/',                                          'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'DentiSalud Floresta - Clínica Odontológica',             '573045579085', 'http://www.dentisalud.com.co/',                                        'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'Sanadent Odontólogos - La Mejor Clínica Dental Medellín','573044486126', 'http://www.sanadentodontologos.com.co/',                               'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'ORAL CONCEPT INVISALIGN',                                '573137662008', 'https://oralconcept.co/home/oral-concept',                             'Dentista cosmético',                 'new', 'import', 'alta'),
-(uid, 'Clínica Colombiana de Implantes Dentales',               '573166900299', 'https://clinicacolombianadeimplantes.com/',                            'Dentista',                           'new', 'import', 'alta'),
-(uid, 'Infinity Smile',                                         '573234650026', 'https://infinitysmile.com/',                                           'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'DentiOral - Sede Belén',                                 '573044448911', 'https://www.dentioral.com/',                                           'Clínica dental',                     'new', 'import', 'alta'),
-(uid, 'Clínica Odontológica Oral Laser Estadio',                '573044440840', 'http://www.oralaser.com.co/',                                          'Clínica dental',                     'new', 'import', 'alta'),
 
--- ── SIN PRIORIDAD (sin página web) ──────────────────────────────
-(uid, 'Odontología Especializada Medellín',                     '573007008281', NULL,                                                                   'Clínica dental',                     'new', 'import', NULL),
-(uid, 'Odontologos en Medellín',                                '573052581651', NULL,                                                                   'Dentista',                           'new', 'import', NULL),
-(uid, 'Dra. Ángela Giraldo',                                    '573022200401', NULL,                                                                   NULL,                                 'new', 'import', NULL),
-(uid, 'Oralprado',                                              '573122172282', NULL,                                                                   'Ortodoncista',                       'new', 'import', NULL),
+-- ── SIN PRIORIDAD (resto) ────────────────────────────────────────
 (uid, 'Plenitud Oral Consultorio Odontológico',                 '572864149',    NULL,                                                                   'Dentista',                           'new', 'import', NULL),
+(uid, 'Dental Sonrisas',                                        '573012642772', 'https://instagram.com/dentalsonrisasyp',                               'Clínica dental',                     'new', 'import', NULL),
+(uid, 'Clínica Dental Home - Sede 2',                           '573104194654', 'https://clinicadentalhome.com/',                                       'Clínica dental',                     'new', 'import', NULL),
+(uid, 'Oralimagen - Dental Implants',                           '573167449425', 'http://www.oralimagen.com/',                                           'Periodoncista de implantes dentales', 'new', 'import', NULL),
+(uid, 'Odontoss Laureles',                                      '573044440062', 'http://www.odontoss.com/',                                             'Clínica dental',                     'new', 'import', NULL),
+(uid, 'Naturaldent',                                            '573115410224', 'https://www.instagram.com/naturaldento',                               'Clínica dental',                     'new', 'import', NULL),
+(uid, 'OdontoestéticaDH',                                       '573053222670', 'http://odontosteticadh.com/',                                          'Clínica dental',                     'new', 'import', NULL),
+(uid, 'DentiSalud Floresta - Clínica Odontológica',             '573045579085', 'http://www.dentisalud.com.co/',                                        'Clínica dental',                     'new', 'import', NULL),
+(uid, 'Sanadent Odontólogos - La Mejor Clínica Dental Medellín','573044486126', 'http://www.sanadentodontologos.com.co/',                               'Clínica dental',                     'new', 'import', NULL),
+(uid, 'ORAL CONCEPT INVISALIGN',                                '573137662008', 'https://oralconcept.co/home/oral-concept',                             'Dentista cosmético',                 'new', 'import', NULL),
+(uid, 'Clínica Colombiana de Implantes Dentales',               '573166900299', 'https://clinicacolombianadeimplantes.com/',                            'Dentista',                           'new', 'import', NULL),
+(uid, 'Infinity Smile',                                         '573234650026', 'https://infinitysmile.com/',                                           'Clínica dental',                     'new', 'import', NULL),
+(uid, 'DentiOral - Sede Belén',                                 '573044448911', 'https://www.dentioral.com/',                                           'Clínica dental',                     'new', 'import', NULL),
+(uid, 'Clínica Odontológica Oral Laser Estadio',                '573044440840', 'http://www.oralaser.com.co/',                                          'Clínica dental',                     'new', 'import', NULL),
 (uid, 'Odonto Super',                                           '573188559859', NULL,                                                                   'Ortodoncista',                       'new', 'import', NULL);
 
 END $$;
+
+
+-- ─────────────────────────────────────────────────────────────────
+-- Si ya ejecutaste la versión anterior y los leads ya están en BD,
+-- usa este UPDATE en su lugar (no duplica, solo corrige la prioridad):
+-- ─────────────────────────────────────────────────────────────────
+/*
+UPDATE leads SET priority = 'alta'
+WHERE source = 'import' AND name IN (
+  'Dental Specialists Medellín','Clínica Viena / Veneers Medellín',
+  'W SMILE premium dental practice','Dra. Erika Diaz Odontología Estética e Integral',
+  'Ortoclin Sede Santa Lucia','Odontología Especializada Medellín',
+  'Clínica Odontológica de Antioquia - CLODAN sas.','Odontologos en Medellín',
+  'Dr. Mauricio Arias - Odontólogo Experto English Dentist',
+  'Lina Fernández Odontología - Diseño de sonrisa','Ortounion Clínica Odontológica',
+  'Oral Center Poblado','Odontología Dra. Tatiana Vasquez smile design',
+  'Clínica Ártica','Trébol Odontología Especializada Medellín',
+  'DentiSalud El Poblado - Clínicas Odontológicas',
+  'Urgencias Odontológicas 24 horas las Vegas','Dentioral - Sede Poblado',
+  'Dra. Ángela Giraldo','Jenny Villada Clínicas Odontológicas',
+  'Royal Dental Care','Oral Studio','MDental Láser','Dental Center',
+  'Dra. Valentina González','Bocas&Risas - Clínica Odontológica en Medellín',
+  'Smile Natural Studio - Clínica & Spa Odontológico','Dental Expertos',
+  'Clínica Unilaser','Clínica Dental Home','Oralprado','Premium Dental Medellín'
+);
+
+UPDATE leads SET priority = NULL
+WHERE source = 'import' AND name IN (
+  'Plenitud Oral Consultorio Odontológico','Dental Sonrisas',
+  'Clínica Dental Home - Sede 2','Oralimagen - Dental Implants',
+  'Odontoss Laureles','Naturaldent','OdontoestéticaDH',
+  'DentiSalud Floresta - Clínica Odontológica',
+  'Sanadent Odontólogos - La Mejor Clínica Dental Medellín',
+  'ORAL CONCEPT INVISALIGN','Clínica Colombiana de Implantes Dentales',
+  'Infinity Smile','DentiOral - Sede Belén',
+  'Clínica Odontológica Oral Laser Estadio','Odonto Super'
+);
+*/
