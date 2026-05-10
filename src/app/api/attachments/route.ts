@@ -1,6 +1,31 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+export async function GET(request: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(request.url);
+  const entity_type = searchParams.get("entity_type");
+  const entity_id = searchParams.get("entity_id");
+
+  if (!entity_type || !entity_id) {
+    return NextResponse.json({ error: "Faltan entity_type o entity_id" }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from("file_attachments")
+    .select("id, file_name, storage_path, content_type, size_bytes, created_at")
+    .eq("owner_id", user.id)
+    .eq("entity_type", entity_type)
+    .eq("entity_id", entity_id)
+    .order("created_at", { ascending: false });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data ?? []);
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

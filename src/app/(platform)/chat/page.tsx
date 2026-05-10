@@ -3,9 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { ChatClient } from "@/components/chat/ChatClient";
 import type { Conversation, WaSessionStatus } from "@/types";
 
-export default async function ChatPage() {
+export default async function ChatPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ conv?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  const { conv } = await searchParams;
 
   // Siempre arrancar en "disconnected" — WaConnectPanel hará el poll real al bridge
   // y transicionará al chat si ya hay sesión activa. Evita leer status stale de Supabase.
@@ -25,6 +30,7 @@ export default async function ChatPage() {
         <ChatClient
           initialStatus={initialStatus}
           initialConversations={(conversations ?? []) as Conversation[]}
+          preselectedConvId={conv}
         />
       </div>
     </div>

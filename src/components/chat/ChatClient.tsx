@@ -12,12 +12,15 @@ import { Button } from "@/components/ui/button";
 interface Props {
   initialStatus: WaSessionStatus;
   initialConversations: Conversation[];
+  preselectedConvId?: string;
 }
 
-export function ChatClient({ initialStatus, initialConversations }: Props) {
+export function ChatClient({ initialStatus, initialConversations, preselectedConvId }: Props) {
   const [status, setStatus] = useState<WaSessionStatus>(initialStatus);
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
-  const [selected, setSelected] = useState<Conversation | null>(null);
+  const [selected, setSelected] = useState<Conversation | null>(
+    preselectedConvId ? (initialConversations.find((c) => c.id === preselectedConvId) ?? null) : null
+  );
   const supabase = createClient();
 
   // Realtime: nuevas conversaciones o actualizaciones

@@ -42,3 +42,15 @@ export async function sendBridgeMessage(to: string, body: string) {
   }
   return res.json() as Promise<{ ok: boolean; wa_message_id: string }>;
 }
+
+export async function sendBridgeFile(to: string, base64: string, mimeType: string, fileName: string) {
+  const res = await bridgeFetch("/send-file", {
+    method: "POST",
+    body: JSON.stringify({ to, base64, mimeType, fileName }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Error desconocido" }));
+    throw new Error(err.error ?? "Error enviando archivo");
+  }
+  return res.json() as Promise<{ ok: boolean; wa_message_id: string }>;
+}

@@ -3,10 +3,16 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Send, Loader2, MessageCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Send, Loader2, MessageCircle, Plus, FileText, Search } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import type { Conversation, Message } from "@/types";
+import type { Conversation, Message, FileAttachment } from "@/types";
 import { cn } from "@/lib/utils";
 
 function formatTime(iso: string) {
@@ -22,6 +28,11 @@ export function MessageThread({ conversation }: Props) {
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [showAttach, setShowAttach] = useState(false);
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [loadingAttach, setLoadingAttach] = useState(false);
+  const [attachSearch, setAttachSearch] = useState("");
+  const [sendingFile, setSendingFile] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
@@ -108,6 +119,45 @@ export function MessageThread({ conversation }: Props) {
     }
   }
 
+  async function openAttachDialog() {
+    setAttachSearch("");
+    setShowAttach(true);
+    if (!conversation.lead_id) return;
+    setLoadingAttach(true);
+    const res = await fetch(`/api/attachments?entity_type=lead&entity_id=${conversation.lead_id}`);
+    if (res.ok) setAttachments(await res.json());
+    setLoadingAttach(false);
+  }
+
+  async function handleSendFile(attachment: FileAttachment) {
+    setSendingFile(true);
+    try {
+      const res = await fetch("/api/whatsapp/send-file", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation_id: conversation.id, attachment_id: attachment.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error ?? "Error enviando archivo");
+        return;
+      }
+      const msg: Message = await res.json();
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === msg.id);
+        return exists ? prev : [...prev, msg];
+      });
+      setShowAttach(false);
+      toast.success("Archivo enviado");
+    } finally {
+      setSendingFile(false);
+    }
+  }
+
+  const filteredAttachments = attachments.filter((a) =>
+    a.file_name.toLowerCase().includes(attachSearch.toLowerCase())
+  );
+
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
@@ -166,6 +216,16 @@ export function MessageThread({ conversation }: Props) {
 
       {/* Input */}
       <form onSubmit={handleSend} className="flex items-center gap-2 px-4 py-3 bg-white border-t">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="shrink-0"
+          onClick={openAttachDialog}
+          title="Adjuntar informe PDF"
+        >
+          <Plus className="w-4 h-4" />
+        </Button>
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -178,6 +238,66 @@ export function MessageThread({ conversation }: Props) {
           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </Button>
       </form>
+
+      {/* Dialog selector de PDFs del lead */}
+      <Dialog open={showAttach} onOpenChange={setShowAttach}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adjuntar informe del lead</DialogTitle>
+          </DialogHeader>
+          {!conversation.lead_id ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              Esta conversación no está vinculada a ningún lead.<br />
+              Usa el botón "Contactar" desde la sección Leads para vincularla.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar archivo..."
+                  value={attachSearch}
+                  onChange={(e) => setAttachSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              {loadingAttach ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                </div>
+              ) : filteredAttachments.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  {attachSearch ? "Sin resultados" : "No hay archivos adjuntos para este lead"}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+                  {filteredAttachments.map((att) => (
+                    <button
+                      key={att.id}
+                      onClick={() => handleSendFile(att)}
+                      disabled={sendingFile}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left transition-colors disabled:opacity-50"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-red-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{att.file_name}</p>
+                        {att.size_bytes && (
+                          <p className="text-xs text-muted-foreground">
+                            {(att.size_bytes / 1024).toFixed(0)} KB
+                          </p>
+                        )}
+                      </div>
+                      {sendingFile && <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

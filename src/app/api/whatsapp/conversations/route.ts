@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { phone, name } = await request.json();
+  const { phone, name, lead_id } = await request.json();
   if (!phone) return NextResponse.json({ error: "Falta el teléfono" }, { status: 400 });
 
   const cleanPhone = phone.replace(/\D/g, "");
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
         wa_chat_id,
         contact_phone: cleanPhone,
         contact_name: name || null,
+        lead_id: lead_id || null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "owner_id,wa_chat_id", ignoreDuplicates: false }

@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   Plus, Search, Phone, Globe, Building2,
   MoreHorizontal, Pencil, Trash2, Eye,
-  Bot, FileText,
+  Bot, FileText, MessageCircle,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -62,6 +62,33 @@ export function LeadsClient({ initialLeads }: Props) {
   const [editLead, setEditLead] = useState<Lead | undefined>();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [contactandoId, setContactandoId] = useState<string | null>(null);
+
+  async function handleContactar(lead: Lead, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!lead.phone) {
+      toast.error("Este lead no tiene número de teléfono registrado");
+      return;
+    }
+    setContactandoId(lead.id);
+    try {
+      const res = await fetch("/api/whatsapp/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: lead.phone, name: lead.name, lead_id: lead.id }),
+      });
+      if (!res.ok) {
+        toast.error("Error creando conversación");
+        return;
+      }
+      const conv = await res.json();
+      router.push(`/chat?conv=${conv.id}`);
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setContactandoId(null);
+    }
+  }
 
   const filtered = leads.filter((l) => {
     const matchSearch = [l.name, l.company, l.phone, l.email].some(
@@ -170,6 +197,13 @@ export function LeadsClient({ initialLeads }: Props) {
                       <DropdownMenuItem onClick={() => router.push(`/leads/${lead.id}`)}>
                         <Eye className="w-4 h-4 mr-2" /> Ver
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => handleContactar(lead, e)}
+                        disabled={!lead.phone || contactandoId === lead.id}
+                      >
+                        <MessageCircle className="w-4 h-4 mr-2" />
+                        {contactandoId === lead.id ? "Abriendo chat..." : "Contactar"}
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setEditLead(lead); setShowForm(true); }}>
                         <Pencil className="w-4 h-4 mr-2" /> Editar
                       </DropdownMenuItem>
@@ -219,6 +253,16 @@ export function LeadsClient({ initialLeads }: Props) {
                   </span>
                 )}
                 <span className="ml-auto text-xs text-muted-foreground">{timeAgo(lead.created_at)}</span>
+                {lead.phone && (
+                  <button
+                    onClick={(e) => handleContactar(lead, e)}
+                    disabled={contactandoId === lead.id}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    <MessageCircle className="w-2.5 h-2.5" />
+                    {contactandoId === lead.id ? "..." : "Contactar"}
+                  </button>
+                )}
               </div>
             </div>
           ))}
