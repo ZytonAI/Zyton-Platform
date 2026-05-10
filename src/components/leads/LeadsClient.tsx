@@ -127,21 +127,21 @@ export function LeadsClient({ initialLeads }: Props) {
   }
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-7 space-y-5">
       {/* Top bar */}
       <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Buscar..."
+            placeholder="Buscar leads..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9"
+            className="pl-9 h-10 bg-white shadow-sm border-gray-200 focus:border-primary/50 rounded-xl"
           />
         </div>
         <Button
           size="sm"
-          className="gap-1.5 shrink-0"
+          className="gap-1.5 shrink-0 h-10 px-4 rounded-xl shadow-sm font-medium"
           onClick={() => { setEditLead(undefined); setShowForm(true); }}
         >
           <Plus className="w-4 h-4" /> Nuevo lead
@@ -149,50 +149,57 @@ export function LeadsClient({ initialLeads }: Props) {
       </div>
 
       {/* Filter pills */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         {FILTERS.map((f) => (
           <button
             key={f.value}
             onClick={() => setFilter(f.value)}
             className={cn(
-              "px-3 py-1 rounded-full text-xs font-medium transition-colors",
+              "px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 tracking-tight",
               filter === f.value
-                ? "bg-gray-900 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-gray-900 text-white shadow-sm"
+                : "bg-white text-gray-500 hover:bg-gray-100 shadow-sm ring-1 ring-gray-200/80"
             )}
           >
             {f.label}
           </button>
         ))}
-        <span className="ml-auto text-xs text-muted-foreground self-center">
+        <span className="ml-auto text-xs text-gray-400 font-medium">
           {filtered.length} lead{filtered.length !== 1 ? "s" : ""}
         </span>
       </div>
 
       {/* Cards grid */}
       {filtered.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground text-sm">
-          {search || filter !== "all" ? "Sin resultados" : "No hay leads aún. ¡Crea el primero!"}
+        <div className="text-center py-20 text-gray-400 text-sm font-medium">
+          {search || filter !== "all" ? "Sin resultados para esta búsqueda" : "No hay leads aún. ¡Crea el primero!"}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((lead) => (
             <div
               key={lead.id}
               onClick={() => router.push(`/leads/${lead.id}`)}
-              className="bg-white border rounded-xl p-4 cursor-pointer hover:shadow-md hover:border-gray-300 transition-all space-y-3 group"
+              className={cn(
+                "bg-white rounded-2xl p-5 cursor-pointer transition-all duration-200 space-y-3.5 group",
+                "shadow-[0_1px_4px_rgba(0,0,0,0.06),_0_1px_2px_rgba(0,0,0,0.04)]",
+                "hover:shadow-[0_8px_32px_rgba(0,0,0,0.12),_0_2px_8px_rgba(0,0,0,0.06)]",
+                "ring-1 ring-black/[0.04] hover:ring-primary/20",
+                "hover:-translate-y-0.5",
+                lead.priority === "alta" && "ring-1 ring-orange-200/60"
+              )}
             >
               {/* Header */}
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-sm text-gray-900 truncate">{lead.name}</p>
+                  <p className="font-semibold text-[13px] text-gray-900 truncate leading-snug tracking-tight">{lead.name}</p>
                   {lead.company && lead.company !== lead.name && (
-                    <p className="text-xs text-muted-foreground truncate">{lead.company}</p>
+                    <p className="text-[11px] text-gray-400 truncate mt-0.5 font-medium">{lead.company}</p>
                   )}
                 </div>
                 <div onClick={(e) => e.stopPropagation()} className="shrink-0">
                   <DropdownMenu>
-                    <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100 transition-all">
+                    <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-gray-100 transition-all shadow-sm ring-1 ring-black/5">
                       <MoreHorizontal className="w-4 h-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -218,53 +225,53 @@ export function LeadsClient({ initialLeads }: Props) {
               </div>
 
               {/* Contact info */}
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {lead.phone && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Phone className="w-3 h-3 shrink-0" />
+                  <div className="flex items-center gap-2 text-[11px] text-gray-400 font-medium">
+                    <Phone className="w-3 h-3 shrink-0 text-gray-300" />
                     <span className="truncate">{lead.phone}</span>
                   </div>
                 )}
                 {lead.website && lead.website !== "Sin página web" && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Globe className="w-3 h-3 shrink-0" />
+                  <div className="flex items-center gap-2 text-[11px] text-gray-400 font-medium">
+                    <Globe className="w-3 h-3 shrink-0 text-gray-300" />
                     <span className="truncate">{lead.website.replace(/^https?:\/\//, "")}</span>
                   </div>
                 )}
                 {lead.notes && !lead.phone && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Building2 className="w-3 h-3 shrink-0" />
+                  <div className="flex items-center gap-2 text-[11px] text-gray-400 font-medium">
+                    <Building2 className="w-3 h-3 shrink-0 text-gray-300" />
                     <span className="truncate">{lead.notes}</span>
                   </div>
                 )}
               </div>
 
               {/* Footer badges */}
-              <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-50">
+              <div className="flex items-center gap-1.5 flex-wrap pt-3 border-t border-gray-100/80">
                 {lead.priority === "alta" && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-600 flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-orange-500 flex items-center gap-1 tracking-tight ring-1 ring-orange-100">
                     <Flame className="w-2.5 h-2.5" /> Alta
                   </span>
                 )}
-                <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", STATUS_COLORS[lead.status])}>
+                <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight", STATUS_COLORS[lead.status])}>
                   {STATUS_LABELS[lead.status]}
                 </span>
                 {lead.source === "raul" && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600 flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-500 flex items-center gap-1 tracking-tight ring-1 ring-blue-100">
                     <Bot className="w-2.5 h-2.5" /> Raúl
                   </span>
                 )}
                 {lead.analyzed && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-600 flex items-center gap-1">
-                    <FileText className="w-2.5 h-2.5" /> Con informe
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-violet-500 flex items-center gap-1 tracking-tight ring-1 ring-violet-100">
+                    <FileText className="w-2.5 h-2.5" /> Informe
                   </span>
                 )}
-                <span className="ml-auto text-xs text-muted-foreground">{timeAgo(lead.created_at)}</span>
+                <span className="ml-auto text-[10px] text-gray-300 font-semibold">{timeAgo(lead.created_at)}</span>
                 {lead.phone && (
                   <button
                     onClick={(e) => handleContactar(lead, e)}
                     disabled={contactandoId === lead.id}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-50 ring-1 ring-emerald-100"
                   >
                     <MessageCircle className="w-2.5 h-2.5" />
                     {contactandoId === lead.id ? "..." : "Contactar"}
