@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   Plus, Search, Phone, Globe, Building2,
   MoreHorizontal, Pencil, Trash2, Eye,
-  Bot, FileText, MessageCircle,
+  Bot, FileText, MessageCircle, Flame,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -36,6 +36,7 @@ const STATUS_COLORS: Record<LeadStatus, string> = {
 
 const FILTERS: { label: string; value: string }[] = [
   { label: "Todos", value: "all" },
+  { label: "Alta prioridad", value: "alta" },
   { label: "Nuevos", value: "new" },
   { label: "Contactados", value: "contacted" },
   { label: "Calificados", value: "qualified" },
@@ -96,6 +97,7 @@ export function LeadsClient({ initialLeads }: Props) {
     );
     const matchFilter =
       filter === "all" ? true :
+      filter === "alta" ? l.priority === "alta" :
       filter === "raul" ? l.source === "raul" :
       filter === "analyzed" ? l.analyzed :
       l.status === filter;
@@ -239,6 +241,11 @@ export function LeadsClient({ initialLeads }: Props) {
 
               {/* Footer badges */}
               <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-50">
+                {lead.priority === "alta" && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-600 flex items-center gap-1">
+                    <Flame className="w-2.5 h-2.5" /> Alta
+                  </span>
+                )}
                 <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", STATUS_COLORS[lead.status])}>
                   {STATUS_LABELS[lead.status]}
                 </span>

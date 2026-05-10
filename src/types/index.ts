@@ -14,6 +14,7 @@ export interface Lead {
   website: string | null;
   maps_url: string | null;
   analyzed: boolean;
+  priority: "alta" | "media" | "baja" | null;
   created_at: string;
   updated_at: string;
 }
