@@ -49,8 +49,17 @@ export async function sendBridgeFile(to: string, base64: string, mimeType: strin
     body: JSON.stringify({ to, base64, mimeType, fileName }),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Error desconocido" }));
-    throw new Error(err.error ?? "Error enviando archivo");
+    // Leer el cuerpo como texto crudo para ver el error real aunque no sea JSON
+    const raw = await res.text().catch(() => "");
+    let errMsg: string;
+    try {
+      const parsed = JSON.parse(raw);
+      errMsg = parsed.error ?? raw;
+    } catch {
+      // El bridge devolvió algo que no es JSON (ej: 413, HTML de error, cuerpo vacío)
+      errMsg = raw.slice(0, 300) || `HTTP ${res.status} sin cuerpo`;
+    }
+    throw new Error(`[Bridge ${res.status}] ${errMsg}`);
   }
   return res.json() as Promise<{ ok: boolean; wa_message_id: string }>;
 }
