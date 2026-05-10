@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Zyton Platform",
   description: "Tu hub empresarial centralizado — ZytonAI",
-  icons: { icon: "/logo.png" },
+  icons: { icon: "/favicon.svg", apple: "/logo.png" },
 };
 
 export default function RootLayout({

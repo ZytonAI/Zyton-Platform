@@ -1,14 +1,14 @@
-<svg viewBox="0 0 50 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M22 4L6 32h13L14 60L38 28H25L30 4H22Z" fill="url(#a)"/>
+  <path d="M44 4L28 32h13L36 60L60 28H47L52 4H44Z" fill="url(#b)"/>
   <defs>
-    <linearGradient id="g1" x1="14" y1="1" x2="14" y2="25" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#60AAFF"/>
-      <stop offset="1" stop-color="#1A6BF5"/>
+    <linearGradient id="a" x1="22" y1="4" x2="16" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
     </linearGradient>
-    <linearGradient id="g2" x1="36" y1="1" x2="36" y2="25" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#60AAFF"/>
-      <stop offset="1" stop-color="#1A6BF5"/>
+    <linearGradient id="b" x1="44" y1="4" x2="38" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
     </linearGradient>
   </defs>
-  <path d="M14 1L3 15h10l-2 10L24 11H14L17 1H14Z" fill="url(#g1)"/>
-  <path d="M36 1L25 15h10l-2 10L46 11H36L39 1H36Z" fill="url(#g2)"/>
 </svg>
