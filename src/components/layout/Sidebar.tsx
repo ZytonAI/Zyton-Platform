@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -42,21 +43,8 @@ export function Sidebar() {
       {/* Brand */}
       <div className="px-5 py-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/30 to-blue-700/20 ring-1 ring-white/10 shadow-inner shrink-0">
-            <svg viewBox="0 0 50 26" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
-              <path d="M14 1L3 15h10l-2 10L24 11H14L17 1H14Z" fill="url(#bolt1)" />
-              <path d="M36 1L25 15h10l-2 10L46 11H36L39 1H36Z" fill="url(#bolt2)" />
-              <defs>
-                <linearGradient id="bolt1" x1="14" y1="1" x2="14" y2="25" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#93C5FD"/>
-                  <stop offset="1" stopColor="#3B82F6"/>
-                </linearGradient>
-                <linearGradient id="bolt2" x1="36" y1="1" x2="36" y2="25" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#93C5FD"/>
-                  <stop offset="1" stopColor="#3B82F6"/>
-                </linearGradient>
-              </defs>
-            </svg>
+          <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-white/10 ring-1 ring-white/10 shrink-0 overflow-hidden">
+            <Image src="/logo.png" alt="Zyton logo" width={36} height={36} className="object-contain" />
           </div>
           <div>
             <p className="font-bold text-sm text-white tracking-tight leading-none">Zyton Platform</p>
