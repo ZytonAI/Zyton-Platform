@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 import type { Invoice } from "@/types";
 
 interface Props {
@@ -76,6 +77,12 @@ export function InvoiceForm({ open, onClose, onSave, initialData }: Props) {
       onSave(saved);
       reset();
       onClose();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      const msg = typeof err.error === "string"
+        ? err.error
+        : err.error?.formErrors?.[0] ?? "Error al guardar la factura";
+      toast.error(msg);
     }
   }
 
