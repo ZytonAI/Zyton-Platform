@@ -74,6 +74,11 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
     });
   }, []);
 
+  const handleDeleteConversation = useCallback((id: string) => {
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    setSelected((prev) => (prev?.id === id ? null : prev));
+  }, []);
+
   if (status !== "connected") {
     return (
       <div className="h-full">
@@ -92,6 +97,7 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
             selectedId={selected?.id ?? null}
             onSelect={setSelected}
             onNewConversation={handleNewConversation}
+            onDeleteConversation={handleDeleteConversation}
           />
         </div>
         <div className="p-3 border-t">

@@ -10,7 +10,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, MessageCircle, Plus, Loader2 } from "lucide-react";
+import { Search, MessageCircle, Plus, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import type { Conversation } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -35,15 +36,18 @@ interface Props {
   selectedId: string | null;
   onSelect: (conv: Conversation) => void;
   onNewConversation: (conv: Conversation) => void;
+  onDeleteConversation: (id: string) => void;
 }
 
-export function ConversationList({ conversations, selectedId, onSelect, onNewConversation }: Props) {
+export function ConversationList({ conversations, selectedId, onSelect, onNewConversation, onDeleteConversation }: Props) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const filtered = conversations.filter((c) => {
     const q = search.toLowerCase();
@@ -53,6 +57,25 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
       c.last_message?.toLowerCase().includes(q)
     );
   });
+
+  async function handleDelete() {
+    if (!deletingId) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/whatsapp/conversations/${deletingId}`, { method: "DELETE" });
+      if (res.ok) {
+        onDeleteConversation(deletingId);
+        toast.success("Chat eliminado");
+      } else {
+        toast.error("Error eliminando el chat");
+      }
+    } catch {
+      toast.error("Error de conexión");
+    } finally {
+      setDeleteLoading(false);
+      setDeletingId(null);
+    }
+  }
 
   async function handleCreate() {
     if (!phone.trim()) { setError("Ingresa un número de teléfono"); return; }
@@ -105,40 +128,73 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
           </div>
         ) : (
           filtered.map((conv) => (
-            <button
+            <div
               key={conv.id}
-              onClick={() => onSelect(conv)}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-50",
+                "group relative flex items-center gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors",
                 selectedId === conv.id && "bg-blue-50 hover:bg-blue-50"
               )}
             >
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-primary font-semibold text-sm">
-                {initials(conv.contact_name, conv.contact_phone)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1">
-                  <span className="font-medium text-sm text-gray-900 truncate">
-                    {conv.contact_name ?? conv.contact_phone}
-                  </span>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {timeAgo(conv.last_message_at)}
-                  </span>
+              <button
+                onClick={() => onSelect(conv)}
+                className="flex items-center gap-3 flex-1 min-w-0 text-left"
+              >
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-primary font-semibold text-sm">
+                  {initials(conv.contact_name, conv.contact_phone)}
                 </div>
-                <div className="flex items-center justify-between gap-1 mt-0.5">
-                  <p className="text-xs text-muted-foreground truncate">{conv.last_message ?? ""}</p>
-                  {conv.unread_count > 0 && (
-                    <span className="shrink-0 min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center px-1">
-                      {conv.unread_count > 99 ? "99+" : conv.unread_count}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-medium text-sm text-gray-900 truncate">
+                      {conv.contact_name ?? conv.contact_phone}
                     </span>
-                  )}
+                    <span className="text-xs text-muted-foreground shrink-0 group-hover:hidden">
+                      {timeAgo(conv.last_message_at)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                    <p className="text-xs text-muted-foreground truncate">{conv.last_message ?? ""}</p>
+                    {conv.unread_count > 0 && (
+                      <span className="shrink-0 min-w-[18px] h-[18px] rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center px-1">
+                        {conv.unread_count > 99 ? "99+" : conv.unread_count}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </button>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setDeletingId(conv.id); }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-50 hover:text-red-500 text-muted-foreground"
+                title="Eliminar chat"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           ))
         )}
       </div>
 
+      {/* Confirmación eliminar */}
+      <Dialog open={!!deletingId} onOpenChange={(v) => { if (!v) setDeletingId(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Eliminar chat</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Se eliminará la conversación y todos sus mensajes. Esta acción no se puede deshacer.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingId(null)} disabled={deleteLoading}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteLoading}>
+              {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nueva conversación */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
