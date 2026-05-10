@@ -271,27 +271,33 @@ export function MessageThread({ conversation }: Props) {
                 </p>
               ) : (
                 <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
-                  {filteredAttachments.map((att) => (
-                    <button
-                      key={att.id}
-                      onClick={() => handleSendFile(att)}
-                      disabled={sendingFile}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left transition-colors disabled:opacity-50"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
-                        <FileText className="w-4 h-4 text-red-500" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{att.file_name}</p>
-                        {att.size_bytes && (
+                  {filteredAttachments.map((att) => {
+                    const isHtml =
+                      att.content_type === "text/html" ||
+                      att.file_name.toLowerCase().endsWith(".html");
+                    const displayName = isHtml
+                      ? att.file_name.replace(/\.html?$/i, ".pdf")
+                      : att.file_name;
+                    return (
+                      <button
+                        key={att.id}
+                        onClick={() => handleSendFile(att)}
+                        disabled={sendingFile}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left transition-colors disabled:opacity-50"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                          <FileText className="w-4 h-4 text-red-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
                           <p className="text-xs text-muted-foreground">
-                            {(att.size_bytes / 1024).toFixed(0)} KB
+                            {isHtml ? "Informe — se enviará como PDF" : att.size_bytes ? `${(att.size_bytes / 1024).toFixed(0)} KB` : ""}
                           </p>
-                        )}
-                      </div>
-                      {sendingFile && <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />}
-                    </button>
-                  ))}
+                        </div>
+                        {sendingFile && <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
