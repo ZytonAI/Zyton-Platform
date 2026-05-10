@@ -212,9 +212,14 @@ export async function POST(request: Request) {
             });
           } catch (err) {
             skippedCount++;
+            // Marcar como sin página para que Elisa no vuelva a intentarlo
+            await supabase
+              .from("leads")
+              .update({ website: "Sin página web" })
+              .eq("id", lead.id);
             emit({
               type: "progress",
-              message: `✗ ${lead.name} — error: ${err instanceof Error ? err.message : String(err)}`,
+              message: `✗ ${lead.name} — sin acceso, marcado como sin página: ${err instanceof Error ? err.message : String(err)}`,
               current: i + 1,
               total: leads.length,
             });
