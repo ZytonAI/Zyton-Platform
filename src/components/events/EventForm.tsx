@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -46,15 +46,24 @@ function splitDateTime(iso: string): { date: string; time: string } {
 export function EventForm({ open, onClose, onSave, initialData, defaultDate }: Props) {
   const isEdit = !!initialData;
 
-  const src = initialData?.event_date
-    ? splitDateTime(initialData.event_date)
-    : defaultDate
-    ? splitDateTime(defaultDate)
-    : { date: "", time: "" };
-
-  const [dateVal, setDateVal] = useState(src.date);
-  const [timeVal, setTimeVal] = useState(src.time === "00:00" ? "" : src.time);
+  const [dateVal, setDateVal] = useState("");
+  const [timeVal, setTimeVal] = useState("");
   const [dateError, setDateError] = useState("");
+
+  // Sync state every time the dialog opens (handles clicking different days)
+  useEffect(() => {
+    if (!open) return;
+    if (isEdit && initialData) {
+      const { date, time } = splitDateTime(initialData.event_date);
+      setDateVal(date);
+      setTimeVal(time === "00:00" || time === "09:00" ? "" : time);
+    } else {
+      const { date, time } = defaultDate ? splitDateTime(defaultDate) : { date: "", time: "" };
+      setDateVal(date);
+      setTimeVal(time === "00:00" || time === "09:00" ? "" : time);
+    }
+    setDateError("");
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const {
     register,
@@ -83,7 +92,7 @@ export function EventForm({ open, onClose, onSave, initialData, defaultDate }: P
       return;
     }
     setDateError("");
-    const eventDate = `${dateVal}T${timeVal || "00:00"}`;
+    const eventDate = `${dateVal}T${timeVal || "12:00"}`;
     const url = isEdit ? `/api/events/${initialData.id}` : "/api/events";
     const method = isEdit ? "PATCH" : "POST";
     const res = await fetch(url, {
@@ -107,12 +116,6 @@ export function EventForm({ open, onClose, onSave, initialData, defaultDate }: P
     setTimeVal("");
     setDateError("");
     onClose();
-  }
-
-  // Sync when dialog opens with a new defaultDate
-  const syncedDate = defaultDate ? splitDateTime(defaultDate).date : "";
-  if (open && !isEdit && syncedDate && dateVal !== syncedDate) {
-    setDateVal(syncedDate);
   }
 
   return (
