@@ -41,8 +41,23 @@ export function Sidebar() {
     <aside className="flex flex-col w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
       {/* Brand */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-sidebar-primary">
-          <span className="text-white font-bold text-base">Z</span>
+        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 shrink-0">
+          <svg viewBox="0 0 50 26" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-7 h-7">
+            <path d="M14 1L3 15h10l-2 10L24 11H14L17 1H14Z" fill="#3B8BF5"/>
+            <path d="M14 1L3 15h10l-2 10L24 11H14L17 1H14Z" fill="url(#bolt1)" />
+            <path d="M36 1L25 15h10l-2 10L46 11H36L39 1H36Z" fill="#3B8BF5"/>
+            <path d="M36 1L25 15h10l-2 10L46 11H36L39 1H36Z" fill="url(#bolt2)" />
+            <defs>
+              <linearGradient id="bolt1" x1="14" y1="1" x2="14" y2="25" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#60AAFF"/>
+                <stop offset="1" stopColor="#1A6BF5"/>
+              </linearGradient>
+              <linearGradient id="bolt2" x1="36" y1="1" x2="36" y2="25" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#60AAFF"/>
+                <stop offset="1" stopColor="#1A6BF5"/>
+              </linearGradient>
+            </defs>
+          </svg>
         </div>
         <div>
           <p className="font-bold text-sm text-white leading-tight">Zyton Platform</p>
