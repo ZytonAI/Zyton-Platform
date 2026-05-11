@@ -30,6 +30,8 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent } from "@/types";
@@ -160,6 +162,20 @@ export function EventsClient({ initialEvents }: Props) {
     toast.success(editEvent ? "Evento actualizado" : "Evento creado");
     setEditEvent(undefined);
     setDefaultDate(undefined);
+  }
+
+  async function handleToggleDone(event: CalendarEvent, e: React.MouseEvent) {
+    e.stopPropagation();
+    const newStatus = event.status === "done" ? "pending" : "done";
+    const res = await fetch(`/api/events/${event.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setEvents((prev) => prev.map((e) => e.id === updated.id ? updated : e));
+    }
   }
 
   async function handleDelete() {
@@ -333,7 +349,7 @@ export function EventsClient({ initialEvents }: Props) {
               const key            = toDateKey(date);
               const isCurrentMonth = date.getMonth() === viewMonth.month;
               const isToday        = key === todayKey;
-              const dayEvents      = eventsByDay.get(key) ?? [];
+              const dayEvents      = (eventsByDay.get(key) ?? []).filter((ev) => ev.status !== "done");
               const MAX_VISIBLE    = 3;
               const overflow       = dayEvents.length - MAX_VISIBLE;
 
@@ -368,23 +384,35 @@ export function EventsClient({ initialEvents }: Props) {
                   {/* Event chips */}
                   <div className="space-y-0.5">
                     {dayEvents.slice(0, MAX_VISIBLE).map((ev) => (
-                      <button
+                      <div
                         key={ev.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditEvent(ev);
-                          setShowForm(true);
-                        }}
-                        title={ev.title}
                         className={[
-                          "w-full text-left text-xs px-1.5 py-0.5 rounded truncate font-medium",
-                          "transition-opacity hover:opacity-80",
+                          "w-full flex items-center gap-1 text-xs rounded font-medium",
+                          "transition-all group/chip",
                           TYPE_CHIP_COLORS[ev.type] ?? "bg-gray-100 text-gray-700",
-                          ev.status === "done" ? "opacity-50 line-through" : "",
                         ].join(" ")}
                       >
-                        {ev.title}
-                      </button>
+                        {/* Checkbox marcar hecho */}
+                        <button
+                          onClick={(e) => handleToggleDone(ev, e)}
+                          className="shrink-0 pl-1 py-0.5 opacity-60 hover:opacity-100 transition-opacity"
+                          title="Marcar como hecho"
+                        >
+                          <Circle className="w-3 h-3" />
+                        </button>
+                        {/* Título — abre el editor */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditEvent(ev);
+                            setShowForm(true);
+                          }}
+                          title={ev.title}
+                          className="flex-1 text-left truncate pr-1.5 py-0.5"
+                        >
+                          {ev.title}
+                        </button>
+                      </div>
                     ))}
                     {overflow > 0 && (
                       <p className="text-xs text-muted-foreground pl-1">
