@@ -172,11 +172,11 @@ export async function POST(request: Request) {
             const html = generateReportHtml(analysis, ciudad);
 
             // Save HTML content directly in DB (no Storage bucket needed)
-            const slug = lead.website
-              .replace(/https?:\/\//, "")
-              .replace(/[^a-z0-9]/gi, "-")
-              .slice(0, 40);
-            const fileName = `informe-${slug}.html`;
+            const safeName = lead.name
+              .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ0-9 ]/g, "")
+              .trim()
+              .slice(0, 50);
+            const fileName = `Informe Web ${safeName}.html`;
 
             await supabase.from("file_attachments").insert({
               owner_id: user.id,
