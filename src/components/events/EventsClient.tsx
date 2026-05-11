@@ -284,8 +284,24 @@ export function EventsClient({ initialEvents }: Props) {
                 </TableRow>
               ) : (
                 filtered.map((event) => (
-                  <TableRow key={event.id} className="hover:bg-gray-50">
-                    <TableCell className="font-medium">{event.title}</TableCell>
+                  <TableRow key={event.id} className={`hover:bg-gray-50 ${event.status === "done" ? "opacity-50" : ""}`}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => handleToggleDone(event, e)}
+                          className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                          title={event.status === "done" ? "Marcar como pendiente" : "Marcar como hecho"}
+                        >
+                          {event.status === "done"
+                            ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            : <Circle className="w-4 h-4" />
+                          }
+                        </button>
+                        <span className={`font-medium ${event.status === "done" ? "line-through text-muted-foreground" : ""}`}>
+                          {event.title}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {TYPE_LABELS[event.type]}
                     </TableCell>
