@@ -135,7 +135,7 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
           ref={inputRef}
           type="file"
           className="hidden"
-          accept="video/*,application/pdf,text/html,image/*,.pdf,.html"
+          accept="*/*"
           onChange={handleFileChange}
         />
       </div>
