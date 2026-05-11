@@ -4,12 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { LeadForm } from "./LeadForm";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   Plus, Search, Phone, Globe, Building2,
   MoreHorizontal, Pencil, Trash2, Eye,
-  Bot, FileText, MessageCircle, Flame,
+  Bot, FileText, MessageCircle, Flame, CalendarClock,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -64,6 +67,46 @@ export function LeadsClient({ initialLeads }: Props) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [contactandoId, setContactandoId] = useState<string | null>(null);
+  const [scheduleLeadId, setScheduleLeadId] = useState<string | null>(null);
+  const [scheduleName, setScheduleName] = useState("");
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+
+  function openSchedule(lead: Lead, e: React.MouseEvent) {
+    e.stopPropagation();
+    setScheduleLeadId(lead.id);
+    setScheduleName(lead.name);
+    setScheduleDate("");
+    setScheduleTime("");
+  }
+
+  async function handleSchedule() {
+    if (!scheduleDate) { toast.error("Selecciona una fecha"); return; }
+    setScheduleSaving(true);
+    try {
+      const eventDate = `${scheduleDate}T${scheduleTime || "09:00"}`;
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Contactar ${scheduleName}`,
+          event_date: eventDate,
+          type: "task",
+          description: `Llamar o escribir a ${scheduleName} para seguimiento comercial.`,
+          status: "pending",
+        }),
+      });
+      if (res.ok) {
+        toast.success("Evento creado en el calendario");
+        setScheduleLeadId(null);
+      } else {
+        toast.error("Error creando el evento");
+      }
+    } finally {
+      setScheduleSaving(false);
+    }
+  }
 
   async function handleContactar(lead: Lead, e: React.MouseEvent) {
     e.stopPropagation();
@@ -213,6 +256,9 @@ export function LeadsClient({ initialLeads }: Props) {
                         <MessageCircle className="w-4 h-4 mr-2" />
                         {contactandoId === lead.id ? "Abriendo chat..." : "Contactar"}
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => openSchedule(lead, e)}>
+                        <CalendarClock className="w-4 h-4 mr-2" /> Programar contacto
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setEditLead(lead); setShowForm(true); }}>
                         <Pencil className="w-4 h-4 mr-2" /> Editar
                       </DropdownMenuItem>
@@ -282,6 +328,38 @@ export function LeadsClient({ initialLeads }: Props) {
           ))}
         </div>
       )}
+
+      {/* Dialog programar contacto */}
+      <Dialog open={!!scheduleLeadId} onOpenChange={(v) => { if (!v) setScheduleLeadId(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Programar contacto</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Se creará una tarea en el calendario para contactar a <span className="font-medium text-gray-800">{scheduleName}</span>.
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">Fecha *</label>
+              <Input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                Hora <span className="text-muted-foreground font-normal">(opcional)</span>
+              </label>
+              <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleLeadId(null)} disabled={scheduleSaving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSchedule} disabled={scheduleSaving || !scheduleDate}>
+              {scheduleSaving ? "Guardando..." : "Crear evento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <LeadForm
         open={showForm}

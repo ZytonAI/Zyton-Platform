@@ -130,6 +130,7 @@ export async function POST(request: Request) {
           .eq("analyzed", false)
           .not("website", "is", null)
           .neq("website", "Sin página web")
+          .order("priority", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: true });
 
         if (leadsErr) {
