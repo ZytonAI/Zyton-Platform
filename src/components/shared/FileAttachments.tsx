@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Paperclip, Download, Trash2, Upload } from "lucide-react";
+import { FileText, Video, Download, Trash2, Upload, Play, Loader2 } from "lucide-react";
 import type { FileAttachment } from "@/types";
 import { toast } from "sonner";
 
@@ -21,15 +21,37 @@ function formatSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function isVideo(file: FileAttachment) {
+  return (
+    file.content_type?.startsWith("video/") ||
+    ["mp4", "mov", "webm", "avi", "mkv"].some((ext) =>
+      file.file_name.toLowerCase().endsWith(`.${ext}`)
+    )
+  );
+}
+
+function isHtml(file: FileAttachment) {
+  return file.content_type === "text/html" || file.file_name.toLowerCase().endsWith(".html");
+}
+
 export function FileAttachments({ attachments, entityType, entityId, onUpload, onDelete }: Props) {
   const [uploading, setUploading] = useState(false);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [videoUrls, setVideoUrls] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploading(true);
 
+    const maxMB = file.type.startsWith("video/") ? 50 : 100;
+    if (file.size > maxMB * 1024 * 1024) {
+      toast.error(`El archivo es demasiado grande (máx. ${maxMB} MB)`);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
+    setUploading(true);
     try {
       const res = await fetch("/api/attachments", {
         method: "POST",
@@ -62,9 +84,20 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
     }
   }
 
+  async function handlePlay(file: FileAttachment) {
+    if (videoUrls[file.id]) {
+      setPlayingId(file.id);
+      return;
+    }
+    setPlayingId(`loading-${file.id}`);
+    const res = await fetch(`/api/attachments/${file.id}`);
+    const { url } = await res.json();
+    setVideoUrls((prev) => ({ ...prev, [file.id]: url }));
+    setPlayingId(file.id);
+  }
+
   async function handleDownload(id: string, fileName: string, contentType?: string | null) {
     if (contentType === "text/html" || fileName.endsWith(".html")) {
-      // Serve via our own route to avoid Supabase Storage CORS/security headers
       window.open(`/api/attachments/${id}/view`, "_blank");
     } else {
       const res = await fetch(`/api/attachments/${id}`);
@@ -98,37 +131,94 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
           <Upload className="w-3.5 h-3.5" />
           {uploading ? "Subiendo..." : "Subir archivo"}
         </Button>
-        <input ref={inputRef} type="file" className="hidden" onChange={handleFileChange} />
+        <input
+          ref={inputRef}
+          type="file"
+          className="hidden"
+          accept="video/*,application/pdf,text/html,image/*,.pdf,.html"
+          onChange={handleFileChange}
+        />
       </div>
 
       {attachments.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-3">
-          Sin archivos adjuntos
-        </p>
+        <p className="text-sm text-muted-foreground text-center py-3">Sin archivos adjuntos</p>
       ) : (
         <div className="space-y-2">
-          {attachments.map((file) => (
-            <div key={file.id} className="flex items-center gap-3 p-2.5 rounded-lg border bg-gray-50">
-              <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{file.file_name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {file.content_type === "text/html"
-                    ? "Informe — abrir e imprimir como PDF"
-                    : formatSize(file.size_bytes)}
-                </p>
+          {attachments.map((file) => {
+            const video = isVideo(file);
+            const html = isHtml(file);
+            const isLoadingVideo = playingId === `loading-${file.id}`;
+            const isPlaying = playingId === file.id;
+
+            return (
+              <div key={file.id} className="rounded-xl border bg-gray-50 overflow-hidden">
+                <div className="flex items-center gap-3 p-2.5">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${video ? "bg-purple-100" : "bg-red-50"}`}>
+                    {video
+                      ? <Video className="w-4 h-4 text-purple-500" />
+                      : <FileText className="w-4 h-4 text-red-400" />
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{file.file_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {html
+                        ? "Informe — abrir e imprimir como PDF"
+                        : video
+                        ? `Video · ${formatSize(file.size_bytes)}`
+                        : formatSize(file.size_bytes)}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    {video && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="w-7 h-7 text-purple-500 hover:text-purple-700"
+                        onClick={() => handlePlay(file)}
+                        disabled={isLoadingVideo}
+                        title="Reproducir"
+                      >
+                        {isLoadingVideo
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Play className="w-3.5 h-3.5" />
+                        }
+                      </Button>
+                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="w-7 h-7"
+                      onClick={() => handleDownload(file.id, file.file_name, file.content_type)}
+                      title="Descargar"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="w-7 h-7 text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(file.id)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Video player inline */}
+                {video && isPlaying && videoUrls[file.id] && (
+                  <div className="px-3 pb-3">
+                    <video
+                      src={videoUrls[file.id]}
+                      controls
+                      autoPlay
+                      className="w-full rounded-lg max-h-64 bg-black"
+                    />
+                  </div>
+                )}
               </div>
-              <div className="flex gap-1 shrink-0">
-                <Button size="icon" variant="ghost" className="w-7 h-7"
-                  onClick={() => handleDownload(file.id, file.file_name, file.content_type)}>
-                  <Download className="w-3.5 h-3.5" />
-                </Button>
-                <Button size="icon" variant="ghost" className="w-7 h-7 text-destructive hover:text-destructive" onClick={() => handleDelete(file.id)}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
