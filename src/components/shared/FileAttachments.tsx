@@ -65,19 +65,20 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
         }),
       });
 
-      const { attachment, signedUrl } = await res.json();
-      if (!res.ok) throw new Error("Error creando URL de subida");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Error creando URL de subida");
 
-      await fetch(signedUrl, {
+      const uploadRes = await fetch(json.signedUrl, {
         method: "PUT",
-        headers: { "Content-Type": file.type },
+        headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file,
       });
+      if (!uploadRes.ok) throw new Error(`Error subiendo a Storage (${uploadRes.status})`);
 
-      onUpload(attachment);
+      onUpload(json.attachment);
       toast.success("Archivo subido correctamente");
-    } catch {
-      toast.error("Error al subir el archivo");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al subir el archivo");
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";

@@ -38,7 +38,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
   }
 
-  const storage_path = `${user.id}/${entity_type}s/${entity_id}/${Date.now()}_${file_name}`;
+  // Sanitizar el nombre para el path de Storage (sin espacios ni caracteres especiales)
+  const safeName = file_name
+    .normalize("NFD").replace(/[̀-ͯ]/g, "") // quitar acentos
+    .replace(/[^a-zA-Z0-9._-]/g, "_")                // reemplazar especiales por _
+    .replace(/_+/g, "_");                              // colapsar múltiples _
+
+  const storage_path = `${user.id}/${entity_type}s/${entity_id}/${Date.now()}_${safeName}`;
 
   const { data: signedUrl, error: signedError } = await supabase.storage
     .from("attachments")
