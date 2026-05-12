@@ -40,7 +40,7 @@ export default async function DashboardPage() {
       .select("id, title, event_date, type, status")
       .eq("owner_id", user!.id)
       .eq("status", "pending")
-      .gte("event_date", new Date().toISOString())
+      .gte("event_date", (() => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d.toISOString(); })())
       .order("event_date", { ascending: true })
       .limit(3),
   ]);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -111,6 +111,8 @@ export function EventsClient({ initialEvents }: Props) {
   const [defaultDate, setDefaultDate] = useState<string | undefined>();
   const [deletingId, setDeletingId]   = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const draggedId = useRef<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   const filtered = events.filter((e) =>
     [e.title, e.description].some((v) =>
@@ -188,6 +190,44 @@ export function EventsClient({ initialEvents }: Props) {
     }
     setDeleteLoading(false);
     setDeletingId(null);
+  }
+
+  function handleDragStart(ev: CalendarEvent, e: React.DragEvent) {
+    e.stopPropagation();
+    draggedId.current = ev.id;
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  async function handleDrop(targetDate: Date, e: React.DragEvent) {
+    e.preventDefault();
+    setDragOverKey(null);
+    const id = draggedId.current;
+    draggedId.current = null;
+    if (!id) return;
+
+    const event = events.find((ev) => ev.id === id);
+    if (!event) return;
+
+    const targetKey = toDateKey(targetDate);
+    if (targetKey === toDateKey(new Date(event.event_date))) return;
+
+    const orig = new Date(event.event_date);
+    const hh = String(orig.getHours()).padStart(2, "0");
+    const mm = String(orig.getMinutes()).padStart(2, "0");
+    const newEventDate = `${targetKey}T${hh}:${mm}`;
+
+    const res = await fetch(`/api/events/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_date: newEventDate }),
+    });
+    if (res.ok) {
+      const updated: CalendarEvent = await res.json();
+      setEvents((prev) => prev.map((ev) => (ev.id === updated.id ? updated : ev)));
+      toast.success("Evento movido");
+    } else {
+      toast.error("Error al mover el evento");
+    }
   }
 
   return (
@@ -373,10 +413,15 @@ export function EventsClient({ initialEvents }: Props) {
                 <div
                   key={idx}
                   onClick={() => isCurrentMonth && openNewForDay(date)}
+                  onDragOver={(e) => { e.preventDefault(); if (isCurrentMonth) setDragOverKey(key); }}
+                  onDragLeave={() => setDragOverKey(null)}
+                  onDrop={(e) => isCurrentMonth && handleDrop(date, e)}
                   className={[
                     "min-h-[100px] p-1.5 border-b transition-colors",
                     (idx + 1) % 7 !== 0 ? "border-r" : "",
-                    isCurrentMonth
+                    dragOverKey === key && isCurrentMonth
+                      ? "bg-blue-100/60"
+                      : isCurrentMonth
                       ? "bg-white hover:bg-blue-50/40 cursor-pointer"
                       : "bg-gray-50/60 cursor-default",
                   ].join(" ")}
@@ -402,9 +447,12 @@ export function EventsClient({ initialEvents }: Props) {
                     {dayEvents.slice(0, MAX_VISIBLE).map((ev) => (
                       <div
                         key={ev.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(ev, e)}
+                        onDragEnd={() => setDragOverKey(null)}
                         className={[
                           "w-full flex items-center gap-1 text-xs rounded font-medium",
-                          "transition-all group/chip",
+                          "transition-all group/chip cursor-grab active:cursor-grabbing",
                           TYPE_CHIP_COLORS[ev.type] ?? "bg-gray-100 text-gray-700",
                         ].join(" ")}
                       >
