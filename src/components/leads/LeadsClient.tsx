@@ -15,7 +15,7 @@ import {
   Bot, FileText, MessageCircle, Flame, CalendarClock,
   UserX, UserCheck, ThumbsUp, ThumbsDown, ShoppingCart,
 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import type { Lead, LeadStatus } from "@/types";
 import { cn } from "@/lib/utils";
@@ -189,6 +189,19 @@ export function LeadsClient({ initialLeads }: Props) {
     setEditLead(undefined);
   }
 
+  async function handleChangeStatus(lead: Lead, status: LeadStatus) {
+    const res = await fetch(`/api/leads/${lead.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setLeads((prev) => prev.map((l) => l.id === updated.id ? updated : l));
+      toast.success(`Estado: ${STATUS_LABELS[status]}`);
+    }
+  }
+
   async function handleDelete() {
     if (!deletingId) return;
     setDeleteLoading(true);
@@ -343,6 +356,24 @@ export function LeadsClient({ initialLeads }: Props) {
                       <DropdownMenuItem onClick={(e) => openSchedule(lead, e)}>
                         <CalendarClock className="w-4 h-4 mr-2" /> Programar contacto
                       </DropdownMenuItem>
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          {(() => { const Icon = STATUS_ICONS[lead.status]; return <Icon className="w-4 h-4 mr-2" />; })()}
+                          Estado: {STATUS_LABELS[lead.status]}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent>
+                          {STATUS_ORDER.filter((s) => s !== lead.status).map((s) => {
+                            const Icon = STATUS_ICONS[s];
+                            return (
+                              <DropdownMenuItem key={s} onClick={() => handleChangeStatus(lead, s)}>
+                                <Icon className="w-4 h-4 mr-2" />
+                                {STATUS_LABELS[s]}
+                              </DropdownMenuItem>
+                            );
+                          })}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => { setEditLead(lead); setShowForm(true); }}>
                         <Pencil className="w-4 h-4 mr-2" /> Editar
                       </DropdownMenuItem>
