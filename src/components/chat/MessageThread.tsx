@@ -236,11 +236,9 @@ export function MessageThread({ conversation, onBack }: Props) {
         {/* Dropdown de estado del lead */}
         {conversation.lead_id && leadStatus && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition-opacity hover:opacity-80 ${LEAD_STATUS_COLORS[leadStatus]}`}>
-                {LEAD_STATUS_LABELS[leadStatus]}
-                <ChevronDown className="w-3 h-3" />
-              </button>
+            <DropdownMenuTrigger className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition-opacity hover:opacity-80 outline-none ${LEAD_STATUS_COLORS[leadStatus]}`}>
+              {LEAD_STATUS_LABELS[leadStatus]}
+              <ChevronDown className="w-3 h-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {LEAD_STATUS_ORDER.filter((s) => s !== leadStatus).map((s) => (
