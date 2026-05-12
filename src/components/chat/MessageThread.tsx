@@ -225,31 +225,32 @@ export function MessageThread({ conversation, onBack }: Props) {
           {(conversation.contact_name ?? conversation.contact_phone).slice(0, 2).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold text-sm text-gray-900">
-              {conversation.contact_name ?? conversation.contact_phone}
-            </p>
-            {/* Dropdown de estado — al lado del nombre */}
-            {conversation.lead_id && leadStatus && (
-              <DropdownMenu>
-                <DropdownMenuTrigger className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold hover:opacity-80 outline-none transition-opacity ${LEAD_STATUS_COLORS[leadStatus]}`}>
-                  {LEAD_STATUS_LABELS[leadStatus]}
-                  <ChevronDown className="w-3 h-3" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {LEAD_STATUS_ORDER.filter((s) => s !== leadStatus).map((s) => (
-                    <DropdownMenuItem key={s} onClick={() => handleChangeLeadStatus(s)}>
-                      {LEAD_STATUS_LABELS[s]}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
+          <p className="font-semibold text-sm text-gray-900">
+            {conversation.contact_name ?? conversation.contact_phone}
+          </p>
           {conversation.contact_name && (
             <p className="text-xs text-muted-foreground">{conversation.contact_phone}</p>
           )}
         </div>
+
+        {/* Dropdown estado del lead — esquina derecha, siempre visible si hay lead */}
+        {conversation.lead_id && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border hover:opacity-80 outline-none transition-opacity ${leadStatus ? LEAD_STATUS_COLORS[leadStatus] : "bg-gray-100 text-gray-500 border-gray-200"}`}
+            >
+              {leadStatus ? LEAD_STATUS_LABELS[leadStatus] : "Estado"}
+              <ChevronDown className="w-3 h-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {LEAD_STATUS_ORDER.filter((s) => s !== leadStatus).map((s) => (
+                <DropdownMenuItem key={s} onClick={() => handleChangeLeadStatus(s)}>
+                  {LEAD_STATUS_LABELS[s]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Messages */}
