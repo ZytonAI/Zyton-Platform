@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
   Plus, Search, Phone, Globe, Building2,
   MoreHorizontal, Pencil, Trash2, Eye,
   Bot, FileText, MessageCircle, Flame, CalendarClock,
+  UserX, UserCheck, ThumbsUp, ThumbsDown, ShoppingCart,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -22,29 +23,39 @@ import { cn } from "@/lib/utils";
 interface Props { initialLeads: Lead[] }
 
 const STATUS_LABELS: Record<LeadStatus, string> = {
-  new: "Nuevo",
+  new:       "Sin contactar",
   contacted: "Contactado",
-  qualified: "Calificado",
-  lost: "Perdido",
-  converted: "Convertido",
+  qualified: "Interesado",
+  lost:      "No interesado",
+  converted: "Compró",
 };
 
 const STATUS_COLORS: Record<LeadStatus, string> = {
-  new: "bg-blue-100 text-blue-700",
-  contacted: "bg-yellow-100 text-yellow-700",
+  new:       "bg-gray-100 text-gray-600",
+  contacted: "bg-blue-100 text-blue-700",
   qualified: "bg-emerald-100 text-emerald-700",
-  lost: "bg-red-100 text-red-700",
+  lost:      "bg-red-100 text-red-700",
   converted: "bg-purple-100 text-purple-700",
 };
 
+const STATUS_ICONS: Record<LeadStatus, React.ElementType> = {
+  new:       UserX,
+  contacted: UserCheck,
+  qualified: ThumbsUp,
+  lost:      ThumbsDown,
+  converted: ShoppingCart,
+};
+
+const STATUS_ORDER: LeadStatus[] = ["new", "contacted", "qualified", "lost", "converted"];
+
 const FILTERS: { label: string; value: string }[] = [
-  { label: "Todos", value: "all" },
+  { label: "Todos",          value: "all" },
+  { label: "Sin contactar",  value: "new" },
+  { label: "Contactados",    value: "contacted" },
+  { label: "Interesados",    value: "qualified" },
+  { label: "No interesados", value: "lost" },
+  { label: "Compraron",      value: "converted" },
   { label: "Alta prioridad", value: "alta" },
-  { label: "Nuevos", value: "new" },
-  { label: "Contactados", value: "contacted" },
-  { label: "Calificados", value: "qualified" },
-  { label: "De Raúl", value: "raul" },
-  { label: "Con informe", value: "analyzed" },
 ];
 
 function timeAgo(iso: string) {
@@ -72,6 +83,18 @@ export function LeadsClient({ initialLeads }: Props) {
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduleSaving, setScheduleSaving] = useState(false);
+
+  // KPIs
+  const kpis = useMemo(() => {
+    const total = leads.length;
+    const byStatus = STATUS_ORDER.reduce((acc, s) => {
+      acc[s] = leads.filter((l) => l.status === s).length;
+      return acc;
+    }, {} as Record<LeadStatus, number>);
+    const conversionRate = total > 0 ? Math.round((byStatus.converted / total) * 100) : 0;
+    const interestRate   = total > 0 ? Math.round(((byStatus.qualified + byStatus.converted) / total) * 100) : 0;
+    return { total, byStatus, conversionRate, interestRate };
+  }, [leads]);
 
   function openSchedule(lead: Lead, e: React.MouseEvent) {
     e.stopPropagation();
@@ -116,15 +139,24 @@ export function LeadsClient({ initialLeads }: Props) {
     }
     setContactandoId(lead.id);
     try {
+      // Auto-cambiar estado a "contactado" si estaba en "sin contactar"
+      if (lead.status === "new") {
+        const patchRes = await fetch(`/api/leads/${lead.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "contacted" }),
+        });
+        if (patchRes.ok) {
+          const updated: Lead = await patchRes.json();
+          setLeads((prev) => prev.map((l) => l.id === updated.id ? updated : l));
+        }
+      }
       const res = await fetch("/api/whatsapp/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: lead.phone, name: lead.name, lead_id: lead.id }),
       });
-      if (!res.ok) {
-        toast.error("Error creando conversación");
-        return;
-      }
+      if (!res.ok) { toast.error("Error creando conversación"); return; }
       const conv = await res.json();
       router.push(`/chat?conv=${conv.id}`);
     } catch {
@@ -139,9 +171,9 @@ export function LeadsClient({ initialLeads }: Props) {
       (v) => v?.toLowerCase().includes(search.toLowerCase())
     );
     const matchFilter =
-      filter === "all" ? true :
-      filter === "alta" ? l.priority === "alta" :
-      filter === "raul" ? l.source === "raul" :
+      filter === "all"      ? true :
+      filter === "alta"     ? l.priority === "alta" :
+      filter === "raul"     ? l.source === "raul" :
       filter === "analyzed" ? l.analyzed :
       l.status === filter;
     return matchSearch && matchFilter;
@@ -170,25 +202,77 @@ export function LeadsClient({ initialLeads }: Props) {
   }
 
   return (
-    <div className="p-7 space-y-5">
-      {/* Top bar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            placeholder="Buscar leads..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-10 bg-white shadow-sm border-gray-200 focus:border-primary/50 rounded-xl"
-          />
+    <div className="p-5 space-y-5">
+
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {STATUS_ORDER.map((s) => {
+          const Icon = STATUS_ICONS[s];
+          const count = kpis.byStatus[s];
+          const pct   = kpis.total > 0 ? Math.round((count / kpis.total) * 100) : 0;
+          return (
+            <button
+              key={s}
+              onClick={() => setFilter(filter === s ? "all" : s)}
+              className={cn(
+                "rounded-2xl p-4 text-left transition-all duration-150 shadow-sm ring-1",
+                filter === s
+                  ? "bg-gray-900 text-white ring-gray-900"
+                  : "bg-white text-gray-700 ring-black/[0.06] hover:ring-primary/20 hover:shadow-md"
+              )}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <Icon className={cn("w-4 h-4", filter === s ? "text-white/60" : "text-gray-400")} />
+                <span className={cn("text-[10px] font-semibold", filter === s ? "text-white/50" : "text-gray-400")}>
+                  {pct}%
+                </span>
+              </div>
+              <p className={cn("text-2xl font-bold leading-none", filter === s ? "text-white" : "text-gray-900")}>
+                {count}
+              </p>
+              <p className={cn("text-[11px] font-medium mt-1 truncate", filter === s ? "text-white/70" : "text-gray-500")}>
+                {STATUS_LABELS[s]}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tasa de conversión */}
+      <div className="flex items-center gap-4 px-4 py-3 rounded-xl bg-white shadow-sm ring-1 ring-black/[0.05]">
+        <div className="text-center">
+          <p className="text-xs text-gray-400 font-medium">Total leads</p>
+          <p className="text-lg font-bold text-gray-900">{kpis.total}</p>
         </div>
-        <Button
-          size="sm"
-          className="gap-1.5 shrink-0 h-10 px-4 rounded-xl shadow-sm font-medium"
-          onClick={() => { setEditLead(undefined); setShowForm(true); }}
-        >
-          <Plus className="w-4 h-4" /> Nuevo lead
-        </Button>
+        <div className="h-8 w-px bg-gray-100" />
+        <div className="text-center">
+          <p className="text-xs text-gray-400 font-medium">Tasa de interés</p>
+          <p className="text-lg font-bold text-emerald-600">{kpis.interestRate}%</p>
+        </div>
+        <div className="h-8 w-px bg-gray-100" />
+        <div className="text-center">
+          <p className="text-xs text-gray-400 font-medium">Tasa de cierre</p>
+          <p className="text-lg font-bold text-purple-600">{kpis.conversionRate}%</p>
+        </div>
+        <div className="flex-1" />
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Buscar leads..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 bg-gray-50 border-gray-200 rounded-xl text-sm"
+            />
+          </div>
+          <Button
+            size="sm"
+            className="gap-1.5 shrink-0 h-9 px-4 rounded-xl font-medium"
+            onClick={() => { setEditLead(undefined); setShowForm(true); }}
+          >
+            <Plus className="w-4 h-4" /> Nuevo lead
+          </Button>
+        </div>
       </div>
 
       {/* Filter pills */}
@@ -351,9 +435,7 @@ export function LeadsClient({ initialLeads }: Props) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setScheduleLeadId(null)} disabled={scheduleSaving}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setScheduleLeadId(null)} disabled={scheduleSaving}>Cancelar</Button>
             <Button onClick={handleSchedule} disabled={scheduleSaving || !scheduleDate}>
               {scheduleSaving ? "Guardando..." : "Crear evento"}
             </Button>

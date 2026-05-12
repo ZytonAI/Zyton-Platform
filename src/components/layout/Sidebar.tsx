@@ -12,6 +12,7 @@ import {
   LogOut,
   Receipt,
   CalendarDays,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard",  icon: LayoutDashboard },
   { href: "/leads",     label: "Leads",       icon: Users },
   { href: "/clients",   label: "Clientes",    icon: Briefcase },
+  { href: "/wiki",      label: "Wiki",         icon: BookOpen },
   { href: "/chat",      label: "Chat",        icon: MessageCircle },
   { href: "/agents",    label: "Agentes",     icon: Bot },
   { href: "/invoices",  label: "Facturas",    icon: Receipt },

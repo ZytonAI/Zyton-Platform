@@ -91,10 +91,11 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="new">Nuevo</SelectItem>
+                  <SelectItem value="new">Sin contactar</SelectItem>
                   <SelectItem value="contacted">Contactado</SelectItem>
-                  <SelectItem value="qualified">Calificado</SelectItem>
-                  <SelectItem value="lost">Perdido</SelectItem>
+                  <SelectItem value="qualified">Interesado</SelectItem>
+                  <SelectItem value="lost">No interesado</SelectItem>
+                  <SelectItem value="converted">Compró</SelectItem>
                 </SelectContent>
               </Select>
             </div>

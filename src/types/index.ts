@@ -163,3 +163,15 @@ export interface CalendarEvent {
   created_at: string;
   updated_at: string;
 }
+
+export interface WikiPage {
+  id: string;
+  owner_id: string;
+  title: string;
+  content: Record<string, unknown>;
+  parent_id: string | null;
+  icon: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
