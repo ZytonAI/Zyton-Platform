@@ -195,10 +195,29 @@ export function LeadsClient({ initialLeads }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    if (res.ok) {
-      const updated = await res.json();
-      setLeads((prev) => prev.map((l) => l.id === updated.id ? updated : l));
-      toast.success(`Estado: ${STATUS_LABELS[status]}`);
+    if (!res.ok) return;
+    const updated = await res.json();
+    setLeads((prev) => prev.map((l) => l.id === updated.id ? updated : l));
+    toast.success(`Estado: ${STATUS_LABELS[status]}`);
+
+    // Auto-recordatorio de seguimiento a los 5 días cuando pasa a Interesado
+    if (status === "qualified") {
+      const d = new Date();
+      d.setDate(d.getDate() + 5);
+      const eventDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T12:00`;
+      await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Seguimiento: ${lead.name}`,
+          type: "task",
+          event_date: eventDate,
+          description: `Lead interesado — re-contactar y dar seguimiento`,
+          status: "pending",
+          lead_id: lead.id,
+        }),
+      });
+      toast.info("Recordatorio de seguimiento creado para 5 días");
     }
   }
 

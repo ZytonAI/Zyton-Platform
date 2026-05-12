@@ -9,7 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Send, Loader2, MessageCircle, Plus, FileText, Search, Video, ArrowLeft } from "lucide-react";
+import { Send, Loader2, MessageCircle, Plus, FileText, Search, Video, ArrowLeft, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { Conversation, Message, FileAttachment } from "@/types";
@@ -24,6 +30,26 @@ interface Props {
   onBack?: () => void;
 }
 
+type LeadStatus = "new" | "contacted" | "qualified" | "lost" | "converted";
+
+const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  new:       "Sin contactar",
+  contacted: "Contactado",
+  qualified: "Interesado",
+  lost:      "No interesado",
+  converted: "Compró",
+};
+
+const LEAD_STATUS_COLORS: Record<LeadStatus, string> = {
+  new:       "bg-gray-100 text-gray-600",
+  contacted: "bg-blue-100 text-blue-700",
+  qualified: "bg-emerald-100 text-emerald-700",
+  lost:      "bg-red-100 text-red-700",
+  converted: "bg-purple-100 text-purple-700",
+};
+
+const LEAD_STATUS_ORDER: LeadStatus[] = ["new", "contacted", "qualified", "lost", "converted"];
+
 export function MessageThread({ conversation, onBack }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +60,7 @@ export function MessageThread({ conversation, onBack }: Props) {
   const [loadingAttach, setLoadingAttach] = useState(false);
   const [attachSearch, setAttachSearch] = useState("");
   const [sendingFile, setSendingFile] = useState(false);
+  const [leadStatus, setLeadStatus] = useState<LeadStatus | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
@@ -58,6 +85,28 @@ export function MessageThread({ conversation, onBack }: Props) {
   useEffect(() => {
     fetchMessages();
   }, [fetchMessages]);
+
+  // Cargar estado del lead vinculado
+  useEffect(() => {
+    if (!conversation.lead_id) { setLeadStatus(null); return; }
+    fetch(`/api/leads/${conversation.lead_id}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((lead) => { if (lead?.status) setLeadStatus(lead.status as LeadStatus); })
+      .catch(() => {});
+  }, [conversation.lead_id]);
+
+  async function handleChangeLeadStatus(status: LeadStatus) {
+    if (!conversation.lead_id) return;
+    const res = await fetch(`/api/leads/${conversation.lead_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      setLeadStatus(status);
+      toast.success(`Lead: ${LEAD_STATUS_LABELS[status]}`);
+    }
+  }
 
   // Supabase Realtime para mensajes nuevos
   useEffect(() => {
@@ -175,7 +224,7 @@ export function MessageThread({ conversation, onBack }: Props) {
         <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm shrink-0">
           {(conversation.contact_name ?? conversation.contact_phone).slice(0, 2).toUpperCase()}
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm text-gray-900">
             {conversation.contact_name ?? conversation.contact_phone}
           </p>
@@ -183,6 +232,25 @@ export function MessageThread({ conversation, onBack }: Props) {
             <p className="text-xs text-muted-foreground">{conversation.contact_phone}</p>
           )}
         </div>
+
+        {/* Dropdown de estado del lead */}
+        {conversation.lead_id && leadStatus && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition-opacity hover:opacity-80 ${LEAD_STATUS_COLORS[leadStatus]}`}>
+                {LEAD_STATUS_LABELS[leadStatus]}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {LEAD_STATUS_ORDER.filter((s) => s !== leadStatus).map((s) => (
+                <DropdownMenuItem key={s} onClick={() => handleChangeLeadStatus(s)}>
+                  {LEAD_STATUS_LABELS[s]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Messages */}

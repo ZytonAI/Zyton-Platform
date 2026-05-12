@@ -1,16 +1,9 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +25,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Circle,
+  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent } from "@/types";
@@ -99,6 +93,7 @@ interface Props {
 }
 
 export function EventsClient({ initialEvents }: Props) {
+  const router = useRouter();
   const [events, setEvents]           = useState<CalendarEvent[]>(initialEvents);
   const [search, setSearch]           = useState("");
   const [view, setView]               = useState<ViewMode>("calendar");
@@ -177,6 +172,18 @@ export function EventsClient({ initialEvents }: Props) {
     if (res.ok) {
       const updated = await res.json();
       setEvents((prev) => prev.map((e) => e.id === updated.id ? updated : e));
+    }
+  }
+
+  async function handleContactarLead(leadId: string) {
+    const res = await fetch("/api/whatsapp/conversations");
+    if (!res.ok) { toast.error("Error cargando conversaciones"); return; }
+    const convs: { id: string; lead_id: string | null }[] = await res.json();
+    const conv = convs.find((c) => c.lead_id === leadId);
+    if (conv) {
+      router.push(`/chat?conv=${conv.id}`);
+    } else {
+      toast.info("No hay chat activo con este lead todavía");
     }
   }
 
@@ -308,87 +315,108 @@ export function EventsClient({ initialEvents }: Props) {
         </div>
       </div>
 
-      {/* ── List view ── */}
+      {/* ── List view — agrupada por día ── */}
       {view === "list" && (
         <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead>Título</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-12">
-                    {search
-                      ? "Sin resultados para tu búsqueda"
-                      : "No hay eventos aún. ¡Crea el primero!"}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((event) => (
-                  <TableRow key={event.id} className={`hover:bg-gray-50 ${event.status === "done" ? "opacity-50" : ""}`}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => handleToggleDone(event, e)}
-                          className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                          title={event.status === "done" ? "Marcar como pendiente" : "Marcar como hecho"}
-                        >
-                          {event.status === "done"
-                            ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            : <Circle className="w-4 h-4" />
-                          }
-                        </button>
-                        <span className={`font-medium ${event.status === "done" ? "line-through text-muted-foreground" : ""}`}>
+          {filtered.length === 0 ? (
+            <p className="text-center text-muted-foreground py-12">
+              {search ? "Sin resultados para tu búsqueda" : "No hay eventos aún. ¡Crea el primero!"}
+            </p>
+          ) : (() => {
+            // Agrupar por día
+            const groups = new Map<string, CalendarEvent[]>();
+            for (const ev of filtered) {
+              const key = toDateKey(new Date(ev.event_date));
+              groups.set(key, [...(groups.get(key) ?? []), ev]);
+            }
+            const sortedKeys = [...groups.keys()].sort();
+            return sortedKeys.map((dayKey) => {
+              const dayEvents = groups.get(dayKey)!;
+              const dayLabel = new Date(dayKey + "T12:00").toLocaleDateString("es-ES", {
+                weekday: "long", day: "numeric", month: "long",
+              }).replace(/^\w/, (c) => c.toUpperCase());
+              const isToday = dayKey === todayKey;
+
+              return (
+                <div key={dayKey}>
+                  {/* Cabecera del día */}
+                  <div className={`px-4 py-2 border-b flex items-center gap-2 ${isToday ? "bg-primary/5" : "bg-gray-50"}`}>
+                    <span className={`text-sm font-bold ${isToday ? "text-primary" : "text-gray-800"}`}>
+                      {dayLabel}
+                    </span>
+                    {isToday && (
+                      <span className="text-[10px] font-semibold bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">
+                        HOY
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Eventos del día */}
+                  {dayEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className={`flex items-center gap-3 px-4 py-3 border-b last:border-b-0 hover:bg-gray-50 transition-colors ${event.status === "done" ? "opacity-50" : ""}`}
+                    >
+                      {/* Checkbox */}
+                      <button
+                        onClick={(e) => handleToggleDone(event, e)}
+                        className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        {event.status === "done"
+                          ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          : <Circle className="w-4 h-4" />
+                        }
+                      </button>
+
+                      {/* Título + tipo */}
+                      <div className="flex-1 min-w-0">
+                        <span className={`font-medium text-sm ${event.status === "done" ? "line-through text-muted-foreground" : "text-gray-900"}`}>
                           {event.title}
                         </span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${TYPE_CHIP_COLORS[event.type] ?? "bg-gray-100 text-gray-600"}`}>
+                            {TYPE_LABELS[event.type]}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(event.event_date).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {TYPE_LABELS[event.type]}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {formatDateTime(event.event_date)}
-                    </TableCell>
-                    <TableCell>
+
+                      {/* Botón Contactar si tiene lead */}
+                      {event.lead_id && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs shrink-0"
+                          onClick={() => handleContactarLead(event.lead_id!)}
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          Contactar
+                        </Button>
+                      )}
+
+                      {/* Estado + menú */}
                       <StatusBadge status={event.status} type="event" />
-                    </TableCell>
-                    <TableCell>
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors">
+                        <DropdownMenuTrigger className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors shrink-0">
                           <MoreHorizontal className="w-4 h-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setEditEvent(event);
-                              setShowForm(true);
-                            }}
-                          >
-                            <Pencil className="w-4 h-4 mr-2" />
-                            Editar
+                          <DropdownMenuItem onClick={() => { setEditEvent(event); setShowForm(true); }}>
+                            <Pencil className="w-4 h-4 mr-2" /> Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => setDeletingId(event.id)}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Eliminar
+                          <DropdownMenuItem className="text-destructive" onClick={() => setDeletingId(event.id)}>
+                            <Trash2 className="w-4 h-4 mr-2" /> Eliminar
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                    </div>
+                  ))}
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
 

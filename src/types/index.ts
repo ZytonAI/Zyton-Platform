@@ -160,6 +160,7 @@ export interface CalendarEvent {
   type: CalendarEventType;
   description: string | null;
   status: CalendarEventStatus;
+  lead_id: string | null;
   created_at: string;
   updated_at: string;
 }
