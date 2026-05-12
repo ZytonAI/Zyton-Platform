@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Send, Loader2, MessageCircle, Plus, FileText, Search, Video } from "lucide-react";
+import { Send, Loader2, MessageCircle, Plus, FileText, Search, Video, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { Conversation, Message, FileAttachment } from "@/types";
@@ -21,9 +21,10 @@ function formatTime(iso: string) {
 
 interface Props {
   conversation: Conversation;
+  onBack?: () => void;
 }
 
-export function MessageThread({ conversation }: Props) {
+export function MessageThread({ conversation, onBack }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -162,6 +163,15 @@ export function MessageThread({ conversation }: Props) {
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-white border-b">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="md:hidden p-1.5 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
+            aria-label="Volver a conversaciones"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        )}
         <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm shrink-0">
           {(conversation.contact_name ?? conversation.contact_phone).slice(0, 2).toUpperCase()}
         </div>

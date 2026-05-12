@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { useSidebar } from "./SidebarContext";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard",  icon: LayoutDashboard },
@@ -26,7 +28,7 @@ const navItems = [
   { href: "/events",    label: "Calendario",  icon: CalendarDays },
 ];
 
-export function Sidebar() {
+function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -38,10 +40,9 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-64 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border shadow-[4px_0_24px_rgba(0,0,0,0.18)]">
-
+    <>
       {/* Brand */}
-      <div className="px-5 py-6 border-b border-sidebar-border">
+      <div className="px-5 py-6 border-b border-sidebar-border shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-white/10 ring-1 ring-white/10 shrink-0 overflow-hidden">
             <Image src="/logo.png" alt="Zyton logo" width={36} height={36} className="object-contain" />
@@ -54,13 +55,14 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-5 space-y-0.5">
+      <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
         {navItems.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
               key={href}
               href={href}
+              onClick={onNavigate}
               className={cn(
                 "relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150",
                 isActive
@@ -79,7 +81,7 @@ export function Sidebar() {
       </nav>
 
       {/* Logout */}
-      <div className="px-3 py-4 border-t border-sidebar-border">
+      <div className="px-3 py-4 border-t border-sidebar-border shrink-0">
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/40 hover:text-white/80 hover:bg-white/[0.07] transition-all duration-150"
@@ -88,6 +90,30 @@ export function Sidebar() {
           <span className="tracking-tight">Cerrar sesión</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+}
+
+export function Sidebar() {
+  const { open, close } = useSidebar();
+
+  return (
+    <>
+      {/* Desktop: siempre visible, en el flujo del layout */}
+      <aside className="hidden md:flex flex-col w-64 shrink-0 min-h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border shadow-[4px_0_24px_rgba(0,0,0,0.18)]">
+        <SidebarNav />
+      </aside>
+
+      {/* Mobile: Sheet drawer desde la izquierda */}
+      <Sheet open={open} onOpenChange={(o) => !o && close()}>
+        <SheetContent
+          side="left"
+          showCloseButton={false}
+          className="w-64 p-0 gap-0 flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border"
+        >
+          <SidebarNav onNavigate={close} />
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

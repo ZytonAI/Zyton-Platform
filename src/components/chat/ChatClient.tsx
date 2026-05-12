@@ -8,6 +8,7 @@ import { WaConnectPanel } from "./WaConnectPanel";
 import type { Conversation, WaSessionStatus } from "@/types";
 import { MessageCircle, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface Props {
   initialStatus: WaSessionStatus;
@@ -35,7 +36,6 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
           if (res.ok) {
             const updated: Conversation[] = await res.json();
             setConversations(updated);
-            // Actualizar conversación seleccionada si cambió
             setSelected((prev) => prev ? updated.find((c) => c.id === prev.id) ?? prev : null);
           }
         }
@@ -61,7 +61,6 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
       await fetch("/api/whatsapp/disconnect", { method: "POST" });
     } finally {
       setDisconnecting(false);
-      // Mantener suppressConnect activo 6s para que el bridge procese el logout
       setTimeout(() => setJustDisconnected(false), 6000);
     }
   }, []);
@@ -89,8 +88,16 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
 
   return (
     <div className="flex h-full">
-      {/* Panel izquierdo — lista de conversaciones */}
-      <div className="w-80 shrink-0 flex flex-col">
+      {/* Panel izquierdo — lista de conversaciones
+          Mobile: full width cuando no hay conversación seleccionada, oculto si hay una
+          Desktop: ancho fijo, siempre visible */}
+      <div
+        className={cn(
+          "shrink-0 flex flex-col border-r",
+          "w-full md:w-80",
+          selected ? "hidden md:flex" : "flex"
+        )}
+      >
         <div className="flex-1 min-h-0">
           <ConversationList
             conversations={conversations}
@@ -114,10 +121,21 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
         </div>
       </div>
 
-      {/* Panel derecho — hilo de mensajes */}
-      <div className="flex-1 min-w-0">
+      {/* Panel derecho — hilo de mensajes
+          Mobile: full width cuando hay conversación seleccionada, oculto si no hay
+          Desktop: flex-1, siempre visible */}
+      <div
+        className={cn(
+          "flex-1 min-w-0",
+          !selected && "hidden md:block"
+        )}
+      >
         {selected ? (
-          <MessageThread key={selected.id} conversation={selected} />
+          <MessageThread
+            key={selected.id}
+            conversation={selected}
+            onBack={() => setSelected(null)}
+          />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-6">
             <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">

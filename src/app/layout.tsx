@@ -16,6 +16,7 @@ export const metadata: Metadata = {
   title: "Zyton Platform",
   description: "Tu hub empresarial centralizado — ZytonAI",
   icons: { icon: "/favicon.svg", apple: "/logo.png" },
+  viewport: "width=device-width, initial-scale=1",
 };
 
 export default function RootLayout({
