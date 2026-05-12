@@ -212,8 +212,8 @@ export function EventsClient({ initialEvents }: Props) {
     if (targetKey === toDateKey(new Date(event.event_date))) return;
 
     const orig = new Date(event.event_date);
-    const hh = String(orig.getHours()).padStart(2, "0");
-    const mm = String(orig.getMinutes()).padStart(2, "0");
+    const hh = String(orig.getUTCHours()).padStart(2, "0");
+    const mm = String(orig.getUTCMinutes()).padStart(2, "0");
     const newEventDate = `${targetKey}T${hh}:${mm}`;
 
     const res = await fetch(`/api/events/${id}`, {
