@@ -40,13 +40,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  // Buscar conversación con sufijo de teléfono (maneja códigos de país faltantes)
-  let convId: string | null = null;
+  // Buscar conversación: primero exacta, luego por sufijo de 10 dígitos
   const phoneSuffix = contact_phone?.slice(-10);
+  let convId: string | null = null;
 
   const { data: exactConv } = await supabase
     .from("conversations")
-    .select("id")
+    .select("id, lead_id")
     .eq("owner_id", owner_id)
     .eq("wa_chat_id", wa_chat_id)
     .maybeSingle();
@@ -62,10 +62,10 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", convId);
-  } else if (phoneSuffix) {
+  } else if (phoneSuffix && phoneSuffix.length >= 7) {
     const { data: suffixConv } = await supabase
       .from("conversations")
-      .select("id")
+      .select("id, lead_id")
       .eq("owner_id", owner_id)
       .like("contact_phone", `%${phoneSuffix}`)
       .order("updated_at", { ascending: false })
@@ -74,6 +74,7 @@ export async function POST(request: Request) {
 
     if (suffixConv) {
       convId = suffixConv.id;
+      // Actualizar al formato canónico de WhatsApp (con código de país) y preservar lead_id
       await supabase
         .from("conversations")
         .update({
@@ -88,7 +89,20 @@ export async function POST(request: Request) {
     }
   }
 
+  // Si no existe, crear nueva conversación e intentar vincular al lead por teléfono
   if (!convId) {
+    let leadId: string | null = null;
+    if (phoneSuffix && phoneSuffix.length >= 7) {
+      const { data: matchLead } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("owner_id", owner_id)
+        .like("phone", `%${phoneSuffix}`)
+        .limit(1)
+        .maybeSingle();
+      leadId = matchLead?.id ?? null;
+    }
+
     const { data: newConv, error: convErr } = await supabase
       .from("conversations")
       .insert({
@@ -96,6 +110,7 @@ export async function POST(request: Request) {
         wa_chat_id,
         contact_phone,
         contact_name: contact_name ?? null,
+        lead_id: leadId,
         last_message: body,
         last_message_at: timestamp ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
