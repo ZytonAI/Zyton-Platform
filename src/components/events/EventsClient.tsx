@@ -212,9 +212,17 @@ export function EventsClient({ initialEvents }: Props) {
     if (targetKey === toDateKey(new Date(event.event_date))) return;
 
     const orig = new Date(event.event_date);
-    const hh = String(orig.getUTCHours()).padStart(2, "0");
-    const mm = String(orig.getUTCMinutes()).padStart(2, "0");
-    const newEventDate = `${targetKey}T${hh}:${mm}`;
+    // Construir nueva fecha en hora LOCAL del usuario para que el calendario
+    // la muestre siempre en el día correcto, independiente de la zona horaria.
+    const newDate = new Date(
+      targetDate.getFullYear(),
+      targetDate.getMonth(),
+      targetDate.getDate(),
+      orig.getHours(),
+      orig.getMinutes(),
+      0, 0,
+    );
+    const newEventDate = newDate.toISOString();
 
     const res = await fetch(`/api/events/${id}`, {
       method: "PATCH",
