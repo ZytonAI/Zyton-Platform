@@ -24,6 +24,11 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
   );
   const supabase = createClient();
 
+  // Unificar conversaciones duplicadas al abrir el chat (una sola vez)
+  useEffect(() => {
+    fetch("/api/admin/merge-conversations", { method: "POST" }).catch(() => {});
+  }, []);
+
   // Realtime: nuevas conversaciones o actualizaciones
   useEffect(() => {
     const channel = supabase

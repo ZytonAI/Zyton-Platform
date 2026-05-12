@@ -16,8 +16,6 @@ export async function POST(request: Request) {
 
   const supabase = createAdminClient();
 
-  // Buscar la sesión más reciente sin requerir status="connected"
-  // El status puede estar momentáneamente desfasado durante reconexiones
   const { data: session } = await supabase
     .from("wa_sessions")
     .select("owner_id")
@@ -31,10 +29,69 @@ export async function POST(request: Request) {
 
   const owner_id = session.owner_id;
 
-  const { data: conv, error: convErr } = await supabase
+  // Si el bridge ya guardó este mensaje directamente en Supabase, no duplicar
+  const { data: existingMsg } = await supabase
+    .from("messages")
+    .select("id")
+    .eq("wa_message_id", wa_message_id)
+    .maybeSingle();
+
+  if (existingMsg) {
+    return NextResponse.json({ ok: true, skipped: true });
+  }
+
+  // Buscar conversación con sufijo de teléfono (maneja códigos de país faltantes)
+  let convId: string | null = null;
+  const phoneSuffix = contact_phone?.slice(-10);
+
+  const { data: exactConv } = await supabase
     .from("conversations")
-    .upsert(
-      {
+    .select("id")
+    .eq("owner_id", owner_id)
+    .eq("wa_chat_id", wa_chat_id)
+    .maybeSingle();
+
+  if (exactConv) {
+    convId = exactConv.id;
+    await supabase
+      .from("conversations")
+      .update({
+        contact_name: contact_name ?? undefined,
+        last_message: body,
+        last_message_at: timestamp ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", convId);
+  } else if (phoneSuffix) {
+    const { data: suffixConv } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("owner_id", owner_id)
+      .like("contact_phone", `%${phoneSuffix}`)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (suffixConv) {
+      convId = suffixConv.id;
+      await supabase
+        .from("conversations")
+        .update({
+          wa_chat_id,
+          contact_phone,
+          contact_name: contact_name ?? undefined,
+          last_message: body,
+          last_message_at: timestamp ?? new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", convId);
+    }
+  }
+
+  if (!convId) {
+    const { data: newConv, error: convErr } = await supabase
+      .from("conversations")
+      .insert({
         owner_id,
         wa_chat_id,
         contact_phone,
@@ -42,22 +99,22 @@ export async function POST(request: Request) {
         last_message: body,
         last_message_at: timestamp ?? new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: "owner_id,wa_chat_id", ignoreDuplicates: false }
-    )
-    .select()
-    .single();
+      })
+      .select("id")
+      .single();
 
-  if (convErr || !conv) {
-    return NextResponse.json({ error: "Error guardando conversacion" }, { status: 500 });
+    if (convErr || !newConv) {
+      return NextResponse.json({ error: "Error guardando conversacion" }, { status: 500 });
+    }
+    convId = newConv.id;
   }
 
-  await supabase.rpc("increment_unread", { conversation_id: conv.id });
+  await supabase.rpc("increment_unread", { conversation_id: convId });
 
   const { error: msgErr } = await supabase.from("messages").upsert(
     {
       owner_id,
-      conversation_id: conv.id,
+      conversation_id: convId,
       wa_message_id,
       direction: "inbound",
       body,
