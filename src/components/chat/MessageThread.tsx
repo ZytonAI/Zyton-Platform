@@ -86,14 +86,28 @@ export function MessageThread({ conversation, onBack }: Props) {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Cargar estado del lead vinculado
+  // Cargar estado del lead — primero por lead_id, luego por teléfono
   useEffect(() => {
-    if (!conversation.lead_id) { setLeadStatus(null); return; }
-    fetch(`/api/leads/${conversation.lead_id}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((lead) => { if (lead?.status) setLeadStatus(lead.status as LeadStatus); })
-      .catch(() => {});
-  }, [conversation.lead_id]);
+    async function loadLeadStatus() {
+      // 1. Por lead_id directo
+      if (conversation.lead_id) {
+        const res = await fetch(`/api/leads/${conversation.lead_id}`);
+        if (res.ok) {
+          const lead = await res.json();
+          if (lead?.status) { setLeadStatus(lead.status as LeadStatus); return; }
+        }
+      }
+      // 2. Fallback: buscar por sufijo de teléfono
+      const suffix = conversation.contact_phone?.slice(-10);
+      if (!suffix) return;
+      const res = await fetch(`/api/leads?search=${suffix}`);
+      if (!res.ok) return;
+      const leads: { id: string; phone?: string; status?: string }[] = await res.json();
+      const match = leads.find((l) => l.phone?.slice(-10) === suffix);
+      if (match?.status) setLeadStatus(match.status as LeadStatus);
+    }
+    loadLeadStatus().catch(() => {});
+  }, [conversation.id, conversation.lead_id, conversation.contact_phone]);
 
   async function handleChangeLeadStatus(status: LeadStatus) {
     let leadId = conversation.lead_id;
