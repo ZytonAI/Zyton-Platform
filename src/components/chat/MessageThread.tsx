@@ -96,8 +96,26 @@ export function MessageThread({ conversation, onBack }: Props) {
   }, [conversation.lead_id]);
 
   async function handleChangeLeadStatus(status: LeadStatus) {
-    if (!conversation.lead_id) return;
-    const res = await fetch(`/api/leads/${conversation.lead_id}`, {
+    let leadId = conversation.lead_id;
+
+    // Si no tiene lead vinculado, buscar por sufijo de teléfono
+    if (!leadId) {
+      const suffix = conversation.contact_phone?.slice(-10);
+      if (!suffix) { toast.error("Sin lead vinculado a esta conversación"); return; }
+      const res = await fetch(`/api/leads?search=${suffix}`);
+      const leads: { id: string; phone?: string }[] = res.ok ? await res.json() : [];
+      const match = leads.find((l) => l.phone?.slice(-10) === suffix);
+      if (!match) { toast.error("No hay lead vinculado a esta conversación"); return; }
+      leadId = match.id;
+      // Vincular la conversación al lead encontrado
+      await fetch(`/api/whatsapp/conversations/${conversation.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_id: leadId }),
+      });
+    }
+
+    const res = await fetch(`/api/leads/${leadId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
@@ -233,24 +251,22 @@ export function MessageThread({ conversation, onBack }: Props) {
           )}
         </div>
 
-        {/* Dropdown estado del lead — esquina derecha, siempre visible si hay lead */}
-        {conversation.lead_id && (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border hover:opacity-80 outline-none transition-opacity ${leadStatus ? LEAD_STATUS_COLORS[leadStatus] : "bg-gray-100 text-gray-500 border-gray-200"}`}
-            >
-              {leadStatus ? LEAD_STATUS_LABELS[leadStatus] : "Estado"}
-              <ChevronDown className="w-3 h-3" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {LEAD_STATUS_ORDER.filter((s) => s !== leadStatus).map((s) => (
-                <DropdownMenuItem key={s} onClick={() => handleChangeLeadStatus(s)}>
-                  {LEAD_STATUS_LABELS[s]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {/* Dropdown estado del lead — siempre visible */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border hover:opacity-80 outline-none transition-opacity ${leadStatus ? LEAD_STATUS_COLORS[leadStatus] : "bg-gray-100 text-gray-500 border-gray-200"}`}
+          >
+            {leadStatus ? LEAD_STATUS_LABELS[leadStatus] : "Estado"}
+            <ChevronDown className="w-3 h-3" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {LEAD_STATUS_ORDER.filter((s) => s !== leadStatus).map((s) => (
+              <DropdownMenuItem key={s} onClick={() => handleChangeLeadStatus(s)}>
+                {LEAD_STATUS_LABELS[s]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Messages */}
