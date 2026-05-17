@@ -271,6 +271,7 @@ function ElisaAgent({ refreshTrigger, onDone }: { refreshTrigger: number; onDone
           }
           await loadStats();
           onDone?.();
+
         } else if (event.type === "error") {
           setError(event.message ?? "Error"); toast.error(event.message);
         }
@@ -411,10 +412,10 @@ function DavooAgent({ elisaDoneTrigger }: { elisaDoneTrigger: number }) {
   const [allDone, setAllDone] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const loadStats = useCallback(async () => {
+  const loadStatsAndPrompts = useCallback(async () => {
     try {
       const supabase = createClient();
-      const [readyRes, doneRes] = await Promise.all([
+      const [readyRes, attachmentsRes] = await Promise.all([
         supabase
           .from("leads")
           .select("*", { count: "exact", head: true })
@@ -423,16 +424,39 @@ function DavooAgent({ elisaDoneTrigger }: { elisaDoneTrigger: number }) {
           .neq("website", "Sin página web"),
         supabase
           .from("file_attachments")
-          .select("*", { count: "exact", head: true })
-          .eq("content_type", "text/markdown"),
+          .select("entity_id, file_name, content")
+          .eq("content_type", "text/markdown")
+          .order("created_at", { ascending: false }),
       ]);
-      setStats({ ready: readyRes.count ?? 0, done: doneRes.count ?? 0 });
+
+      const attachments = attachmentsRes.data ?? [];
+      setStats({ ready: readyRes.count ?? 0, done: attachments.length });
+
+      if (attachments.length > 0) {
+        const leadIds = attachments.map((a) => a.entity_id);
+        const { data: leads } = await supabase
+          .from("leads")
+          .select("id, name")
+          .in("id", leadIds);
+        const leadMap = new Map((leads ?? []).map((l) => [l.id, l.name]));
+
+        setResults(
+          attachments
+            .filter((a) => a.content)
+            .map((a) => ({
+              id: a.entity_id,
+              name: leadMap.get(a.entity_id) ?? "Lead",
+              prompt: a.content as string,
+              fileName: a.file_name,
+            }))
+        );
+      }
     } catch {
       setStats({ ready: 0, done: 0 });
     }
   }, []);
 
-  useEffect(() => { loadStats(); }, [loadStats, elisaDoneTrigger]);
+  useEffect(() => { loadStatsAndPrompts(); }, [loadStatsAndPrompts, elisaDoneTrigger]);
 
   async function copyPrompt(result: DavooResult) {
     await navigator.clipboard.writeText(result.prompt);
@@ -458,11 +482,10 @@ function DavooAgent({ elisaDoneTrigger }: { elisaDoneTrigger: number }) {
             setAllDone(true);
             setLogs((p) => [...p, "✓ Sin pendientes — todos los prompts ya fueron generados"]);
           } else {
-            setResults(e.results ?? []);
             setLogs((p) => [...p, `✓ ${e.generated} prompts generados, ${e.skipped} omitidos`]);
             toast.success(`${e.generated} prompts de diseño creados`);
           }
-          await loadStats();
+          await loadStatsAndPrompts();
         } else if (event.type === "error") {
           setError(event.message ?? "Error"); toast.error(event.message);
         }
