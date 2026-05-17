@@ -15,6 +15,10 @@ import {
   AlertCircle,
   MapPin,
   BarChart2,
+  Wand2,
+  Copy,
+  Check,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -214,7 +218,7 @@ interface ElisaResult {
   html: string;
 }
 
-function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
+function ElisaAgent({ refreshTrigger, onDone }: { refreshTrigger: number; onDone?: () => void }) {
   const [stats, setStats] = useState<{ pending: number; done: number; noWeb: number } | null>(null);
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
@@ -266,6 +270,7 @@ function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
             toast.success(`${e.analyzed} informes generados`);
           }
           await loadStats();
+          onDone?.();
         } else if (event.type === "error") {
           setError(event.message ?? "Error"); toast.error(event.message);
         }
@@ -389,13 +394,210 @@ function ElisaAgent({ refreshTrigger }: { refreshTrigger: number }) {
   );
 }
 
+// ─── DAVOO — Design Prompt Generator ─────────────────────────
+interface DavooResult {
+  id: string;
+  name: string;
+  prompt: string;
+  fileName: string;
+}
+
+function DavooAgent({ elisaDoneTrigger }: { elisaDoneTrigger: number }) {
+  const [stats, setStats] = useState<{ ready: number; done: number } | null>(null);
+  const [running, setRunning] = useState(false);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [results, setResults] = useState<DavooResult[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [allDone, setAllDone] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const [readyRes, doneRes] = await Promise.all([
+        supabase
+          .from("leads")
+          .select("*", { count: "exact", head: true })
+          .eq("analyzed", true)
+          .not("website", "is", null)
+          .neq("website", "Sin página web"),
+        supabase
+          .from("file_attachments")
+          .select("*", { count: "exact", head: true })
+          .eq("content_type", "text/markdown"),
+      ]);
+      setStats({ ready: readyRes.count ?? 0, done: doneRes.count ?? 0 });
+    } catch {
+      setStats({ ready: 0, done: 0 });
+    }
+  }, []);
+
+  useEffect(() => { loadStats(); }, [loadStats, elisaDoneTrigger]);
+
+  async function copyPrompt(result: DavooResult) {
+    await navigator.clipboard.writeText(result.prompt);
+    setCopiedId(result.id);
+    toast.success("Prompt copiado al portapapeles");
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  function downloadPrompt(result: DavooResult) {
+    const blob = new Blob([result.prompt], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = result.fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function run() {
+    setRunning(true); setLogs([]); setResults([]); setError(null); setAllDone(false);
+    try {
+      for await (const event of readSSE("/api/agents/davoo", {}) as AsyncGenerator<AgentEvent>) {
+        if (event.type === "status" || event.type === "progress") {
+          setLogs((p) => [...p, event.message ?? ""]);
+        } else if (event.type === "result") {
+          const e = event as { generated?: number; skipped?: number; results?: DavooResult[]; allDone?: boolean };
+          if (e.allDone) {
+            setAllDone(true);
+            setLogs((p) => [...p, "✓ Sin pendientes — todos los prompts ya fueron generados"]);
+          } else {
+            setResults(e.results ?? []);
+            setLogs((p) => [...p, `✓ ${e.generated} prompts generados, ${e.skipped} omitidos`]);
+            toast.success(`${e.generated} prompts de diseño creados`);
+          }
+          await loadStats();
+        } else if (event.type === "error") {
+          setError(event.message ?? "Error"); toast.error(event.message);
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg); toast.error(msg);
+    } finally { setRunning(false); }
+  }
+
+  const pending = stats ? Math.max(0, stats.ready - stats.done) : 0;
+  const noPending = stats !== null && pending === 0;
+  const noElisaLeads = stats !== null && stats.ready === 0;
+
+  return (
+    <Card className="border-0 shadow-sm flex-1">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+            <Wand2 className="w-5 h-5 text-orange-600" />
+          </div>
+          <div>
+            <CardTitle className="text-base">Davoo</CardTitle>
+            <p className="text-xs text-muted-foreground">Design Prompt Generator · GPT-4o → Prompt para Claude</p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {stats && (
+          <div className="flex gap-2">
+            <div className="flex-1 bg-orange-50 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-orange-700">{pending}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Pendientes</p>
+            </div>
+            <div className="flex-1 bg-emerald-50 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-emerald-700">{stats.done}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Generados</p>
+            </div>
+            <div className="flex-1 bg-slate-50 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-slate-700">{stats.ready}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Listos de Elisa</p>
+            </div>
+          </div>
+        )}
+
+        {noElisaLeads ? (
+          <p className="text-xs text-muted-foreground text-center py-2">
+            Elisa aún no ha generado informes. Ejecútala primero.
+          </p>
+        ) : noPending && !running && allDone ? (
+          <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 rounded-lg p-3">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            Todos los prompts de diseño ya fueron generados.
+          </div>
+        ) : null}
+
+        <Button
+          onClick={run}
+          disabled={running || (noPending && stats !== null)}
+          className="w-full gap-2 bg-orange-500 hover:bg-orange-600"
+          size="sm"
+        >
+          {running
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> Generando prompts...</>
+            : <><Wand2 className="w-4 h-4" /> Generar prompts de diseño</>}
+        </Button>
+
+        {error && (
+          <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded-lg p-3">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /><span>{error}</span>
+          </div>
+        )}
+
+        <StatusLog logs={logs} running={running} />
+
+        {results.length > 0 && (
+          <div className="space-y-2 mt-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Prompts generados
+            </p>
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {results.map((r) => (
+                <div key={r.id} className="border rounded-lg p-2.5 text-xs space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <FileText className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                      <span className="font-semibold text-sm text-gray-900 truncate">{r.name}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {(new TextEncoder().encode(r.prompt).byteLength / 1024).toFixed(1)} KB
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-7 text-xs gap-1"
+                      onClick={() => copyPrompt(r)}
+                    >
+                      {copiedId === r.id
+                        ? <><Check className="w-3 h-3 text-emerald-500" /> Copiado</>
+                        : <><Copy className="w-3 h-3" /> Copiar prompt</>}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-7 text-xs gap-1"
+                      onClick={() => downloadPrompt(r)}
+                    >
+                      <ExternalLink className="w-3 h-3" /> Descargar .md
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────
 export function AgentsPageClient() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [elisaDoneTrigger, setElisaDoneTrigger] = useState(0);
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
-      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+    <div className="p-6 space-y-6 max-w-6xl">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
         <span className="flex items-center gap-1.5 font-medium text-gray-700">
           <Search className="w-4 h-4 text-blue-500" /> Raúl
         </span>
@@ -404,17 +606,25 @@ export function AgentsPageClient() {
           <Sparkles className="w-4 h-4 text-violet-500" /> Elisa
         </span>
         <ChevronRight className="w-4 h-4" />
-        <span className="text-gray-500">Lead en CRM + Informe HTML/PDF</span>
+        <span className="flex items-center gap-1.5 font-medium text-gray-700">
+          <Wand2 className="w-4 h-4 text-orange-500" /> Davoo
+        </span>
+        <ChevronRight className="w-4 h-4" />
+        <span className="text-gray-500">Lead en CRM + Informe + Prompt de Rediseño</span>
       </div>
 
       <div className="flex gap-5 items-start">
         <RaulAgent onLeadsAdded={() => setRefreshTrigger((n) => n + 1)} />
-        <ElisaAgent refreshTrigger={refreshTrigger} />
+        <ElisaAgent
+          refreshTrigger={refreshTrigger}
+          onDone={() => setElisaDoneTrigger((n) => n + 1)}
+        />
+        <DavooAgent elisaDoneTrigger={elisaDoneTrigger} />
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Raúl busca negocios con número de contacto en Google Places (sin contacto = omitido, sin web = guardado sin análisis).
-        Elisa analiza automáticamente los leads con página web que no hayan sido procesados, genera el informe con IA y lo adjunta al lead.
+        Raúl busca negocios en Google Places → Elisa analiza sus webs y genera informes →
+        Davoo lee cada informe, re-escanea el sitio y crea un prompt personalizado para rediseñarlo con Claude.
       </p>
     </div>
   );
