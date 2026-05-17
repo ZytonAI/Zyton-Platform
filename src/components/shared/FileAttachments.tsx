@@ -34,6 +34,10 @@ function isHtml(file: FileAttachment) {
   return file.content_type === "text/html" || file.file_name.toLowerCase().endsWith(".html");
 }
 
+function isMarkdown(file: FileAttachment) {
+  return file.content_type === "text/markdown" || file.file_name.toLowerCase().endsWith(".md");
+}
+
 export function FileAttachments({ attachments, entityType, entityId, onUpload, onDelete }: Props) {
   const [uploading, setUploading] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -98,7 +102,10 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
   }
 
   async function handleDownload(id: string, fileName: string, contentType?: string | null) {
-    if (contentType === "text/html" || fileName.endsWith(".html")) {
+    if (
+      contentType === "text/html" || fileName.endsWith(".html") ||
+      contentType === "text/markdown" || fileName.endsWith(".md")
+    ) {
       window.open(`/api/attachments/${id}/view`, "_blank");
     } else {
       const res = await fetch(`/api/attachments/${id}`);
@@ -148,15 +155,18 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
           {attachments.map((file) => {
             const video = isVideo(file);
             const html = isHtml(file);
+            const md = isMarkdown(file);
             const isLoadingVideo = playingId === `loading-${file.id}`;
             const isPlaying = playingId === file.id;
 
             return (
               <div key={file.id} className="rounded-xl border bg-gray-50 overflow-hidden">
                 <div className="flex items-center gap-3 p-2.5">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${video ? "bg-purple-100" : "bg-red-50"}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${video ? "bg-purple-100" : md ? "bg-orange-50" : "bg-red-50"}`}>
                     {video
                       ? <Video className="w-4 h-4 text-purple-500" />
+                      : md
+                      ? <FileText className="w-4 h-4 text-orange-500" />
                       : <FileText className="w-4 h-4 text-red-400" />
                     }
                   </div>
@@ -165,6 +175,8 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
                     <p className="text-xs text-muted-foreground">
                       {html
                         ? "Informe — abrir e imprimir como PDF"
+                        : md
+                        ? "Prompt de diseño — ver en nueva pestaña"
                         : video
                         ? `Video · ${formatSize(file.size_bytes)}`
                         : formatSize(file.size_bytes)}

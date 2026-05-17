@@ -23,9 +23,10 @@ export async function GET(
 
   // Fast path: content stored directly in DB
   if (attachment.content) {
+    const ct = attachment.content_type === "text/markdown" ? "text/plain" : "text/html";
     return new Response(attachment.content as string, {
       headers: {
-        "Content-Type": "text/html; charset=utf-8",
+        "Content-Type": `${ct}; charset=utf-8`,
         "Cache-Control": "no-store",
       },
     });
