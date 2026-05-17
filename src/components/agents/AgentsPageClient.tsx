@@ -432,25 +432,28 @@ function DavooAgent({ elisaDoneTrigger }: { elisaDoneTrigger: number }) {
       const attachments = attachmentsRes.data ?? [];
       setStats({ ready: readyRes.count ?? 0, done: attachments.length });
 
-      if (attachments.length > 0) {
-        const leadIds = attachments.map((a) => a.entity_id);
-        const { data: leads } = await supabase
-          .from("leads")
-          .select("id, name")
-          .in("id", leadIds);
-        const leadMap = new Map((leads ?? []).map((l) => [l.id, l.name]));
-
-        setResults(
-          attachments
-            .filter((a) => a.content)
-            .map((a) => ({
-              id: a.entity_id,
-              name: leadMap.get(a.entity_id) ?? "Lead",
-              prompt: a.content as string,
-              fileName: a.file_name,
-            }))
-        );
+      if (attachments.length === 0) {
+        setResults([]);
+        return;
       }
+
+      const leadIds = attachments.map((a) => a.entity_id);
+      const { data: leads } = await supabase
+        .from("leads")
+        .select("id, name")
+        .in("id", leadIds);
+      const leadMap = new Map((leads ?? []).map((l) => [l.id, l.name]));
+
+      setResults(
+        attachments
+          .filter((a) => a.content)
+          .map((a) => ({
+            id: a.entity_id,
+            name: leadMap.get(a.entity_id) ?? "Lead",
+            prompt: a.content as string,
+            fileName: a.file_name,
+          }))
+      );
     } catch {
       setStats({ ready: 0, done: 0 });
     }
