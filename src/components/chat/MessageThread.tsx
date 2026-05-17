@@ -30,11 +30,12 @@ interface Props {
   onBack?: () => void;
 }
 
-type LeadStatus = "new" | "contacted" | "qualified" | "lost" | "converted";
+type LeadStatus = "new" | "contacted" | "scheduled" | "qualified" | "lost" | "converted";
 
 const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   new:       "Sin contactar",
   contacted: "Contactado",
+  scheduled: "Programado",
   qualified: "Interesado",
   lost:      "No interesado",
   converted: "Compró",
@@ -43,12 +44,13 @@ const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
 const LEAD_STATUS_COLORS: Record<LeadStatus, string> = {
   new:       "bg-gray-100 text-gray-600",
   contacted: "bg-blue-100 text-blue-700",
+  scheduled: "bg-amber-100 text-amber-700",
   qualified: "bg-emerald-100 text-emerald-700",
   lost:      "bg-red-100 text-red-700",
   converted: "bg-purple-100 text-purple-700",
 };
 
-const LEAD_STATUS_ORDER: LeadStatus[] = ["new", "contacted", "qualified", "lost", "converted"];
+const LEAD_STATUS_ORDER: LeadStatus[] = ["new", "contacted", "scheduled", "qualified", "lost", "converted"];
 
 export function MessageThread({ conversation, onBack }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);

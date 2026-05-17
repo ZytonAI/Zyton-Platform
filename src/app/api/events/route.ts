@@ -34,5 +34,16 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Auto-actualizar estado del lead a "scheduled" si el evento tiene lead vinculado
+  if (parsed.data.lead_id) {
+    await supabase
+      .from("leads")
+      .update({ status: "scheduled" })
+      .eq("id", parsed.data.lead_id)
+      .eq("owner_id", user.id)
+      .not("status", "in", '("lost","converted")');
+  }
+
   return NextResponse.json(data, { status: 201 });
 }

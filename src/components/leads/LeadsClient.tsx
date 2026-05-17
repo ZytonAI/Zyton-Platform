@@ -25,6 +25,7 @@ interface Props { initialLeads: Lead[] }
 const STATUS_LABELS: Record<LeadStatus, string> = {
   new:       "Sin contactar",
   contacted: "Contactado",
+  scheduled: "Programado",
   qualified: "Interesado",
   lost:      "No interesado",
   converted: "Compró",
@@ -33,6 +34,7 @@ const STATUS_LABELS: Record<LeadStatus, string> = {
 const STATUS_COLORS: Record<LeadStatus, string> = {
   new:       "bg-gray-100 text-gray-600",
   contacted: "bg-blue-100 text-blue-700",
+  scheduled: "bg-amber-100 text-amber-700",
   qualified: "bg-emerald-100 text-emerald-700",
   lost:      "bg-red-100 text-red-700",
   converted: "bg-purple-100 text-purple-700",
@@ -41,17 +43,19 @@ const STATUS_COLORS: Record<LeadStatus, string> = {
 const STATUS_ICONS: Record<LeadStatus, React.ElementType> = {
   new:       UserX,
   contacted: UserCheck,
+  scheduled: CalendarClock,
   qualified: ThumbsUp,
   lost:      ThumbsDown,
   converted: ShoppingCart,
 };
 
-const STATUS_ORDER: LeadStatus[] = ["new", "contacted", "qualified", "lost", "converted"];
+const STATUS_ORDER: LeadStatus[] = ["new", "contacted", "scheduled", "qualified", "lost", "converted"];
 
 const FILTERS: { label: string; value: string }[] = [
   { label: "Todos",          value: "all" },
   { label: "Sin contactar",  value: "new" },
   { label: "Contactados",    value: "contacted" },
+  { label: "Programados",    value: "scheduled" },
   { label: "Interesados",    value: "qualified" },
   { label: "No interesados", value: "lost" },
   { label: "Compraron",      value: "converted" },

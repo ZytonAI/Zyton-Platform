@@ -93,6 +93,7 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
                 <SelectContent>
                   <SelectItem value="new">Sin contactar</SelectItem>
                   <SelectItem value="contacted">Contactado</SelectItem>
+                  <SelectItem value="scheduled">Programado</SelectItem>
                   <SelectItem value="qualified">Interesado</SelectItem>
                   <SelectItem value="lost">No interesado</SelectItem>
                   <SelectItem value="converted">Compró</SelectItem>

@@ -4,6 +4,7 @@ import type { LeadStatus, ClientStatus, InvoiceStatus, CalendarEventStatus } fro
 const LEAD_CONFIG: Record<LeadStatus, { label: string; className: string }> = {
   new:       { label: "Nuevo",      className: "bg-gray-100 text-gray-700 hover:bg-gray-100" },
   contacted: { label: "Contactado", className: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
+  scheduled: { label: "Programado", className: "bg-amber-100 text-amber-700 hover:bg-amber-100" },
   qualified: { label: "Calificado", className: "bg-green-100 text-green-700 hover:bg-green-100" },
   lost:      { label: "Perdido",    className: "bg-red-100 text-red-700 hover:bg-red-100" },
   converted: { label: "Convertido", className: "bg-violet-100 text-violet-700 hover:bg-violet-100" },

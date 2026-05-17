@@ -1,4 +1,4 @@
-export type LeadStatus = "new" | "contacted" | "qualified" | "lost" | "converted";
+export type LeadStatus = "new" | "contacted" | "scheduled" | "qualified" | "lost" | "converted";
 export type ClientStatus = "active" | "inactive" | "churned";
 
 export interface Lead {
