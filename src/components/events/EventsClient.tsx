@@ -109,11 +109,15 @@ export function EventsClient({ initialEvents }: Props) {
   const draggedId = useRef<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
-  const filtered = events.filter((e) =>
-    [e.title, e.description].some((v) =>
+  const todayKey = toDateKey(new Date());
+
+  const filtered = events.filter((e) => {
+    const matchesSearch = [e.title, e.description].some((v) =>
       v?.toLowerCase().includes(search.toLowerCase())
-    )
-  );
+    );
+    const notPast = toDateKey(new Date(e.event_date)) >= todayKey;
+    return matchesSearch && notPast;
+  });
 
   const calendarCells = useMemo(
     () => getCalendarCells(viewMonth.year, viewMonth.month),
@@ -121,8 +125,6 @@ export function EventsClient({ initialEvents }: Props) {
   );
 
   const eventsByDay = useMemo(() => groupByDay(events), [events]);
-
-  const todayKey = toDateKey(new Date());
 
   const monthTitle = new Date(viewMonth.year, viewMonth.month, 1)
     .toLocaleDateString("es-ES", { month: "long", year: "numeric" })
@@ -320,7 +322,7 @@ export function EventsClient({ initialEvents }: Props) {
         <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
           {filtered.length === 0 ? (
             <p className="text-center text-muted-foreground py-12">
-              {search ? "Sin resultados para tu búsqueda" : "No hay eventos aún. ¡Crea el primero!"}
+              {search ? "Sin resultados para tu búsqueda" : "No hay eventos próximos. ¡Crea el primero!"}
             </p>
           ) : (() => {
             // Agrupar por día
