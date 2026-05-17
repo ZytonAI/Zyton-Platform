@@ -441,14 +441,9 @@ function DavooAgent({ elisaDoneTrigger }: { elisaDoneTrigger: number }) {
     setTimeout(() => setCopiedId(null), 2000);
   }
 
-  function downloadPrompt(result: DavooResult) {
-    const safeFileName = result.fileName.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ0-9 ._-]/g, "-");
-    const a = document.createElement("a");
-    a.href = `data:text/plain;charset=utf-8,${encodeURIComponent(result.prompt)}`;
-    a.download = safeFileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  function openPrompt(result: DavooResult) {
+    const blob = new Blob([result.prompt], { type: "text/plain" });
+    window.open(URL.createObjectURL(blob), "_blank");
   }
 
   async function run() {
@@ -575,9 +570,9 @@ function DavooAgent({ elisaDoneTrigger }: { elisaDoneTrigger: number }) {
                       variant="outline"
                       size="sm"
                       className="flex-1 h-7 text-xs gap-1"
-                      onClick={() => downloadPrompt(r)}
+                      onClick={() => openPrompt(r)}
                     >
-                      <ExternalLink className="w-3 h-3" /> Descargar .md
+                      <ExternalLink className="w-3 h-3" /> Ver prompt
                     </Button>
                   </div>
                 </div>
