@@ -442,15 +442,13 @@ function DavooAgent({ elisaDoneTrigger }: { elisaDoneTrigger: number }) {
   }
 
   function downloadPrompt(result: DavooResult) {
-    const blob = new Blob([result.prompt], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
+    const safeFileName = result.fileName.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ0-9 ._-]/g, "-");
     const a = document.createElement("a");
-    a.href = url;
-    a.download = result.fileName;
+    a.href = `data:text/plain;charset=utf-8,${encodeURIComponent(result.prompt)}`;
+    a.download = safeFileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async function run() {
