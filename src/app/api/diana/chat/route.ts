@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { processDianaMessage } from "@/lib/diana-core";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Solo para verificar auth — las queries las hace el service client
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json().catch(() => ({})) as {
@@ -20,12 +22,13 @@ export async function POST(request: Request) {
   }
 
   const baseUrl = new URL(request.url).origin;
+  const db = createServiceClient();
 
   const reply = await processDianaMessage(
     user.id,
     body.message.trim(),
     body.channel ?? "web",
-    supabase,
+    db,
     baseUrl
   );
 
@@ -33,15 +36,16 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  // Retorna el historial reciente del canal web
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const url = new URL(request.url);
   const channel = (url.searchParams.get("channel") ?? "web") as "web" | "telegram";
 
-  const { data, error } = await supabase
+  const db = createServiceClient();
+
+  const { data, error } = await db
     .from("diana_messages")
     .select("id,role,content,created_at")
     .eq("owner_id", user.id)
@@ -51,8 +55,7 @@ export async function GET(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Tareas pendientes/completadas recientes
-  const { data: tasks } = await supabase
+  const { data: tasks } = await db
     .from("diana_tasks")
     .select("id,agent,status,result_summary,created_at,completed_at")
     .eq("owner_id", user.id)
