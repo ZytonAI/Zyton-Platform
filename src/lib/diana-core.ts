@@ -37,7 +37,8 @@ export async function processDianaMessage(
   userMessage: string,
   channel: "web" | "telegram",
   supabase: SupabaseClient,
-  baseUrl: string
+  baseUrl: string,
+  imageUrl?: string  // URL o base64 para visión
 ): Promise<string> {
   // 1. Cargar historial reciente
   const { data: history } = await supabase
@@ -50,22 +51,39 @@ export async function processDianaMessage(
 
   const pastMessages: DianaMessage[] = (history ?? []).reverse();
 
-  // 2. Guardar el mensaje del usuario
+  // 2. Guardar el mensaje del usuario (sin la imagen, solo el texto)
+  const storedContent = imageUrl
+    ? `[Imagen] ${userMessage || "Analiza esta imagen"}`.trim()
+    : userMessage;
+
   await supabase.from("diana_messages").insert({
     owner_id: ownerId,
     channel,
     role: "user",
-    content: userMessage,
+    content: storedContent,
   });
 
   // 3. Construir el array de mensajes para OpenAI
+  // El mensaje actual puede llevar imagen; el historial solo texto
+  const currentUserContent: OpenAI.Chat.ChatCompletionContentPart[] = [];
+  if (userMessage) currentUserContent.push({ type: "text", text: userMessage });
+  if (imageUrl) {
+    currentUserContent.push({
+      type: "image_url",
+      image_url: { url: imageUrl, detail: "auto" },
+    });
+  }
+
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: SYSTEM_PROMPT },
     ...pastMessages.map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     })),
-    { role: "user", content: userMessage },
+    {
+      role: "user",
+      content: imageUrl ? currentUserContent : (userMessage || "Analiza esta imagen"),
+    },
   ];
 
   // 4. Loop de tool calling

@@ -10,7 +10,38 @@ interface TelegramUpdate {
     chat: { id: number };
     from?: { id: number; first_name?: string };
     text?: string;
+    caption?: string;
+    photo?: { file_id: string; file_size?: number }[];
+    voice?: { file_id: string; duration: number; mime_type?: string };
+    audio?: { file_id: string; duration: number; mime_type?: string };
   };
+}
+
+async function getTelegramFileUrl(fileId: string): Promise<string> {
+  const token = process.env.TELEGRAM_BOT_TOKEN!;
+  const res = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
+  const data = await res.json();
+  return `https://api.telegram.org/file/bot${token}/${data.result.file_path}`;
+}
+
+async function transcribeAudioUrl(audioUrl: string, mimeType: string): Promise<string> {
+  const audioRes = await fetch(audioUrl);
+  const buffer = await audioRes.arrayBuffer();
+  const ext = mimeType.includes("ogg") ? "ogg" : mimeType.includes("mp4") ? "mp4" : "mp3";
+  const file = new File([buffer], `audio.${ext}`, { type: mimeType || "audio/ogg" });
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("model", "whisper-1");
+  form.append("language", "es");
+
+  const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: form,
+  });
+  const whisperData = await whisperRes.json();
+  return whisperData.text ?? "";
 }
 
 async function sendTelegramMessage(chatId: number, text: string) {
@@ -32,13 +63,13 @@ export async function POST(request: Request) {
   const update: TelegramUpdate = await request.json().catch(() => ({}));
   const msg = update.message;
 
-  // Ignorar actualizaciones sin mensaje de texto
-  if (!msg?.text || !msg.chat.id) {
-    return NextResponse.json({ ok: true });
-  }
+  // Ignorar actualizaciones sin contenido reconocible
+  if (!msg?.chat?.id) return NextResponse.json({ ok: true });
+  const hasContent = msg.text || msg.photo || msg.voice || msg.audio || msg.caption;
+  if (!hasContent) return NextResponse.json({ ok: true });
 
   const chatId = msg.chat.id;
-  const text = msg.text.trim();
+  const text = msg.text?.trim() ?? "";
   const supabase = createServiceClient();
 
   // Comando /start para vincular la cuenta de Telegram
@@ -97,13 +128,33 @@ export async function POST(request: Request) {
   // Procesar mensaje con Diana
   try {
     const baseUrl = new URL(request.url).origin;
-    const reply = await processDianaMessage(
-      profile.id,
-      text,
-      "telegram",
-      supabase,
-      baseUrl
-    );
+    let reply: string;
+
+    if (msg.photo) {
+      // Imagen: obtener URL de Telegram y pasar a Diana con visión
+      const largest = msg.photo[msg.photo.length - 1];
+      const imageUrl = await getTelegramFileUrl(largest.file_id);
+      const caption = msg.caption ?? "¿Qué ves en esta imagen?";
+      reply = await processDianaMessage(profile.id, caption, "telegram", supabase, baseUrl, imageUrl);
+
+    } else if (msg.voice || msg.audio) {
+      // Audio: transcribir con Whisper y procesar como texto
+      const audioObj = msg.voice ?? msg.audio!;
+      const audioUrl = await getTelegramFileUrl(audioObj.file_id);
+      const mimeType = audioObj.mime_type ?? "audio/ogg";
+      const transcript = await transcribeAudioUrl(audioUrl, mimeType);
+      if (!transcript) {
+        await sendTelegramMessage(chatId, "No pude entender el audio. ¿Puedes escribirlo?");
+        return NextResponse.json({ ok: true });
+      }
+      // Mostrar el transcript al usuario antes de responder
+      await sendTelegramMessage(chatId, `🎤 _"${transcript}"_`);
+      reply = await processDianaMessage(profile.id, transcript, "telegram", supabase, baseUrl);
+
+    } else {
+      // Texto normal
+      reply = await processDianaMessage(profile.id, text, "telegram", supabase, baseUrl);
+    }
 
     await sendTelegramMessage(chatId, reply);
   } catch (err) {

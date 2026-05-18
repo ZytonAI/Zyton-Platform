@@ -15,9 +15,10 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({})) as {
     message?: string;
     channel?: "web" | "telegram";
+    imageBase64?: string;
   };
 
-  if (!body.message?.trim()) {
+  if (!body.message?.trim() && !body.imageBase64) {
     return NextResponse.json({ error: "Mensaje vacío" }, { status: 400 });
   }
 
@@ -26,10 +27,11 @@ export async function POST(request: Request) {
 
   const reply = await processDianaMessage(
     user.id,
-    body.message.trim(),
+    body.message?.trim() ?? "",
     body.channel ?? "web",
     db,
-    baseUrl
+    baseUrl,
+    body.imageBase64
   );
 
   return NextResponse.json({ reply });
