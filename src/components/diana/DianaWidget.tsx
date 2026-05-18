@@ -46,6 +46,7 @@ export function DianaWidget() {
   const [telegramConnected, setTelegramConnected] = useState<boolean | null>(null);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [generatingToken, setGeneratingToken] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Verificar estado de Telegram al abrir
@@ -86,10 +87,17 @@ export function DianaWidget() {
   async function generateToken() {
     setGeneratingToken(true);
     setLinkToken(null);
+    setTokenError(null);
     try {
       const res = await fetch("/api/diana/telegram/generate-token", { method: "POST" });
       const data = await res.json();
-      setLinkToken(data.token);
+      if (data.token) {
+        setLinkToken(data.token);
+      } else {
+        setTokenError(data.error ?? "Error desconocido al generar el token");
+      }
+    } catch {
+      setTokenError("Error de conexión. Intenta de nuevo.");
     } finally {
       setGeneratingToken(false);
     }
@@ -195,6 +203,10 @@ export function DianaWidget() {
                       >
                         {generatingToken ? "Generando..." : linkToken ? "Regenerar token" : "Generar token"}
                       </button>
+
+                      {tokenError && (
+                        <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{tokenError}</p>
+                      )}
 
                       {linkToken && (
                         <>

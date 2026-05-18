@@ -17,12 +17,11 @@ export async function POST() {
   const db = createServiceClient();
   const { error } = await db
     .from("profiles")
-    .update({ telegram_link_token: token })
-    .eq("id", user.id);
+    .upsert({ id: user.id, telegram_link_token: token }, { onConflict: "id" });
 
   if (error) {
     console.error("[generate-token] Error guardando token:", error.message);
-    return NextResponse.json({ error: "No se pudo guardar el token" }, { status: 500 });
+    return NextResponse.json({ error: `Error BD: ${error.message}` }, { status: 500 });
   }
 
   return NextResponse.json({ token });
