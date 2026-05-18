@@ -287,21 +287,38 @@ export async function runTool(
       }
 
       case "get_calendar": {
-        let query = supabase
-          .from("calendar_events")
-          .select("id,title,event_date,type,description,status")
-          .eq("owner_id", ownerId)
-          .is("deleted_at", null)
-          .order("event_date", { ascending: true })
-          .limit(Math.min(Number(args.limit ?? 20), 50));
-
         const now = new Date();
         now.setHours(0, 0, 0, 0);
-        query = query.gte("event_date", now.toISOString());
+        const limit = Math.min(Number(args.limit ?? 20), 50);
 
-        if (args.status) query = query.eq("status", args.status as string);
+        // Intentar con filtro soft-delete; si falla el schema cache, reintentar sin él
+        let data: Record<string, unknown>[] | null = null;
+        let error: { message: string } | null = null;
 
-        const { data, error } = await query;
+        const baseQuery = () =>
+          supabase
+            .from("calendar_events")
+            .select("id,title,event_date,type,description,status")
+            .eq("owner_id", ownerId)
+            .gte("event_date", now.toISOString())
+            .order("event_date", { ascending: true })
+            .limit(limit);
+
+        const res1 = await baseQuery().is("deleted_at", null);
+        if (res1.error?.message?.includes("deleted_at")) {
+          // Columna no en schema cache aún — fallback sin filtro
+          const res2 = await baseQuery();
+          data = res2.data as Record<string, unknown>[] | null;
+          error = res2.error;
+        } else {
+          data = res1.data as Record<string, unknown>[] | null;
+          error = res1.error;
+        }
+
+        if (args.status && data) {
+          data = data.filter((e) => e.status === args.status);
+        }
+
         if (error) return `Error consultando calendario: ${error.message}`;
         if (!data || data.length === 0) return "No hay eventos próximos en el calendario.";
         return JSON.stringify(data);
@@ -501,7 +518,19 @@ export async function runTool(
           .eq("id", eventId)
           .eq("owner_id", ownerId);
 
-        if (error) return `Error eliminando evento: ${error.message}`;
+        if (error) {
+          if (error.message.includes("deleted_at")) {
+            // Schema cache aún no tiene la columna — hard delete como fallback
+            const { error: hardErr } = await supabase
+              .from("calendar_events")
+              .delete()
+              .eq("id", eventId)
+              .eq("owner_id", ownerId);
+            if (hardErr) return `Error eliminando evento: ${hardErr.message}`;
+          } else {
+            return `Error eliminando evento: ${error.message}`;
+          }
+        }
 
         // Log para poder revertir
         await supabase.from("diana_action_log").insert({
