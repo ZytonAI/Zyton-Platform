@@ -265,12 +265,11 @@ export async function runTool(
       case "get_calendar": {
         let query = supabase
           .from("calendar_events")
-          .select("id,title,event_date,type,description,status,lead_id")
+          .select("id,title,event_date,type,description,status")
           .eq("owner_id", ownerId)
           .order("event_date", { ascending: true })
           .limit(Math.min(Number(args.limit ?? 20), 50));
 
-        // Por defecto solo eventos futuros o de hoy
         const now = new Date();
         now.setHours(0, 0, 0, 0);
         query = query.gte("event_date", now.toISOString());
@@ -278,7 +277,7 @@ export async function runTool(
         if (args.status) query = query.eq("status", args.status as string);
 
         const { data, error } = await query;
-        if (error) return `Error: ${error.message}`;
+        if (error) return `Error consultando calendario: ${error.message}`;
         if (!data || data.length === 0) return "No hay eventos próximos en el calendario.";
         return JSON.stringify(data);
       }
@@ -328,9 +327,10 @@ export async function runTool(
           event_date: eventDate,
           type: args.type ?? "event",
           description: args.description ?? null,
-          lead_id: args.lead_id ?? null,
           status: "pending",
         };
+        // lead_id solo si fue proporcionado explícitamente
+        if (args.lead_id) row.lead_id = args.lead_id;
 
         const { data, error } = await supabase
           .from("calendar_events")
