@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { processDianaMessage } from "@/lib/diana-core";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
   const chatId = msg.chat.id;
   const text = msg.text.trim();
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   // Comando /start para vincular la cuenta de Telegram
   if (text.startsWith("/start")) {
