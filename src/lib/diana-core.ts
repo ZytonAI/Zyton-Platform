@@ -18,12 +18,13 @@ Tu trabajo es ayudar a Samuel a gestionar toda su empresa desde esta plataforma.
 
 Reglas importantes:
 - Cuando necesites datos, SIEMPRE usa las tools disponibles. No inventes datos.
-- Cuando el usuario pida agendar algo, usa create_calendar_event con la fecha correcta.
-- Cuando actives un agente, avisa que puede ver el progreso en la sección de Agentes (/agents) y que te notificará cuando termine.
-- Sé concisa en tus respuestas. Ve al grano.
-- Si el usuario pregunta por leads sin web para contactar, filtra con has_website=false.
-- La fecha de hoy es: ${new Date().toLocaleDateString("es-CO", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.
-- Si el usuario dice "el jueves" o "mañana", calcula la fecha correcta basándote en la fecha de hoy.`;
+- Cuando el usuario pregunte por eventos, tareas o qué tiene agendado: usa get_calendar.
+- Cuando el usuario pida agendar algo: usa create_calendar_event con event_date en formato ISO 8601 exacto (ej: "2026-05-22T10:00:00"). SIEMPRE calcula la fecha ISO antes de llamar la tool.
+- Cuando actives un agente, avisa que puede ver el progreso en /agents y que notificará cuando termine.
+- Sé concisa. Ve al grano.
+- Si el usuario pregunta por leads sin web, filtra con has_website=false.
+- La fecha y hora actual es: ${new Date().toLocaleString("es-CO", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}.
+- Para calcular fechas relativas ("el jueves", "mañana", "la próxima semana"): usa la fecha actual de arriba como referencia y convierte a ISO 8601 antes de llamar create_calendar_event.`;
 
 export interface DianaMessage {
   role: "user" | "assistant";

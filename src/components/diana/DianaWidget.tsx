@@ -118,7 +118,7 @@ export function DianaWidget() {
   return (
     <>
       {open && (
-        <div className="fixed bottom-20 left-4 z-50 w-80 sm:w-96 h-[540px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200">
+        <div className="fixed bottom-20 right-4 z-50 w-80 sm:w-96 h-[540px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 bg-indigo-600 text-white shrink-0">
             <div className="flex items-center gap-2">
@@ -258,7 +258,7 @@ export function DianaWidget() {
       {/* Botón flotante */}
       <button
         onClick={open ? () => setOpen(false) : handleOpen}
-        className="fixed bottom-4 left-4 z-50 w-12 h-12 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center"
+        className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center"
         aria-label="Abrir chat con Diana"
       >
         {open ? <X className="w-5 h-5" /> : <Bot className="w-5 h-5" />}

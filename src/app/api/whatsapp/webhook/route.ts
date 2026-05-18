@@ -143,5 +143,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Error guardando mensaje" }, { status: 500 });
   }
 
+  // Notificar a Diana en Telegram cuando llega un mensaje nuevo
+  const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (telegramToken) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("telegram_chat_id")
+      .eq("id", owner_id)
+      .single();
+
+    if (profile?.telegram_chat_id) {
+      const senderName = contact_name || contact_phone;
+      const preview = body.length > 150 ? body.slice(0, 150) + "..." : body;
+      await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: profile.telegram_chat_id,
+          text: `💬 *${senderName}* te ha respondido:\n\n_${preview}_`,
+          parse_mode: "Markdown",
+        }),
+      }).catch(() => {});
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }

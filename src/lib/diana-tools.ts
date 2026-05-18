@@ -268,13 +268,19 @@ export async function runTool(
           .select("id,title,event_date,type,description,status,lead_id")
           .eq("owner_id", ownerId)
           .order("event_date", { ascending: true })
-          .limit(Math.min(Number(args.limit ?? 10), 30));
+          .limit(Math.min(Number(args.limit ?? 20), 50));
+
+        // Por defecto solo eventos futuros o de hoy
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        query = query.gte("event_date", now.toISOString());
 
         if (args.status) query = query.eq("status", args.status as string);
 
         const { data, error } = await query;
         if (error) return `Error: ${error.message}`;
-        return JSON.stringify(data ?? []);
+        if (!data || data.length === 0) return "No hay eventos próximos en el calendario.";
+        return JSON.stringify(data);
       }
 
       case "get_clients": {
@@ -306,10 +312,20 @@ export async function runTool(
       }
 
       case "create_calendar_event": {
+        // Normalizar la fecha — aceptar ISO o cualquier string parseable
+        let eventDate: string;
+        try {
+          const d = new Date(args.event_date as string);
+          if (isNaN(d.getTime())) throw new Error("Fecha inválida");
+          eventDate = d.toISOString();
+        } catch {
+          return `No pude interpretar la fecha "${args.event_date}". Usa formato ISO como "2026-05-22T10:00:00".`;
+        }
+
         const row: Record<string, unknown> = {
           owner_id: ownerId,
           title: args.title,
-          event_date: args.event_date,
+          event_date: eventDate,
           type: args.type ?? "event",
           description: args.description ?? null,
           lead_id: args.lead_id ?? null,
@@ -324,14 +340,12 @@ export async function runTool(
 
         if (error) return `Error creando evento: ${error.message}`;
 
-        // Si hay lead_id, actualizar estado a 'scheduled'
         if (args.lead_id) {
           await supabase
             .from("leads")
             .update({ status: "scheduled" })
-            .eq("id", args.lead_id)
-            .eq("owner_id", ownerId)
-            .not("status", "in", '("lost","converted")');
+            .eq("id", args.lead_id as string)
+            .eq("owner_id", ownerId);
         }
 
         return JSON.stringify({ success: true, event: data });
