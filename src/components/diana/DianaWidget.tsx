@@ -6,6 +6,39 @@ import { DianaChat } from "./DianaChat";
 
 type Tab = "chat" | "telegram";
 
+function VerifyButton({ onConnected }: { onConnected: () => void }) {
+  const [state, setState] = useState<"idle" | "checking" | "not_found">("idle");
+
+  async function verify() {
+    setState("checking");
+    try {
+      const res = await fetch("/api/diana/telegram/generate-token");
+      const d = await res.json();
+      if (d.connected) {
+        onConnected();
+      } else {
+        setState("not_found");
+        setTimeout(() => setState("idle"), 3000);
+      }
+    } catch {
+      setState("not_found");
+      setTimeout(() => setState("idle"), 3000);
+    }
+  }
+
+  return (
+    <button
+      onClick={verify}
+      disabled={state === "checking"}
+      className="w-full py-2 px-4 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+    >
+      {state === "checking" && "Verificando..."}
+      {state === "not_found" && "❌ Aún no vinculado. Intenta de nuevo."}
+      {state === "idle" && "Ya lo hice — verificar conexión"}
+    </button>
+  );
+}
+
 export function DianaWidget() {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
@@ -196,21 +229,9 @@ export function DianaWidget() {
                             </p>
                           </div>
 
-                          <button
-                            onClick={() => {
-                              fetch("/api/diana/telegram/generate-token")
-                                .then((r) => r.json())
-                                .then((d) => {
-                                  if (d.connected) {
-                                    setTelegramConnected(true);
-                                    setLinkToken(null);
-                                  }
-                                });
-                            }}
-                            className="w-full py-2 px-4 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors"
-                          >
-                            Ya lo hice — verificar conexión
-                          </button>
+                          <VerifyButton
+                            onConnected={() => { setTelegramConnected(true); setLinkToken(null); }}
+                          />
                         </>
                       )}
                     </div>
