@@ -197,6 +197,24 @@ export const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "delete_calendar_event",
+      description:
+        "Elimina un evento o tarea del calendario. Primero usa get_calendar para obtener el ID del evento que el usuario quiere borrar.",
+      parameters: {
+        type: "object",
+        properties: {
+          event_id: {
+            type: "string",
+            description: "UUID del evento a eliminar",
+          },
+        },
+        required: ["event_id"],
+      },
+    },
+  },
 ];
 
 // ── Tool handlers ─────────────────────────────────────────────────────────────
@@ -421,6 +439,20 @@ export async function runTool(
 
         if (error) return `Error: ${error.message}`;
         return JSON.stringify(data ?? []);
+      }
+
+      case "delete_calendar_event": {
+        const eventId = args.event_id as string;
+        if (!eventId) return "No se proporcionó el ID del evento.";
+
+        const { error } = await supabase
+          .from("calendar_events")
+          .delete()
+          .eq("id", eventId)
+          .eq("owner_id", ownerId);
+
+        if (error) return `Error eliminando evento: ${error.message}`;
+        return JSON.stringify({ success: true, deleted_id: eventId });
       }
 
       default:
