@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { notifyDiana } from "@/lib/diana-notify";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,6 +28,8 @@ export async function POST(request: Request) {
   let userId: string;
   let tipo: string;
   let ciudad: string;
+  let dianaTaskId: string | null = null;
+  const baseUrl = new URL(request.url).origin;
 
   try {
     supabase = await createClient();
@@ -34,9 +37,10 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     userId = user.id;
 
-    const body = await request.json().catch(() => ({})) as { tipo?: string; ciudad?: string };
+    const body = await request.json().catch(() => ({})) as { tipo?: string; ciudad?: string; diana_task_id?: string };
     tipo = body.tipo ?? "";
     ciudad = body.ciudad ?? "";
+    dianaTaskId = body.diana_task_id ?? null;
 
     if (!tipo || !ciudad) {
       return NextResponse.json({ error: "Faltan tipo y ciudad" }, { status: 400 });
@@ -162,7 +166,20 @@ export async function POST(request: Request) {
           sinWeb,
           conWeb,
         });
+
+        if (dianaTaskId) {
+          await notifyDiana(
+            baseUrl,
+            dianaTaskId,
+            userId,
+            "done",
+            `Raúl terminó: encontré ${saved?.length ?? 0} leads de "${tipo}" en ${ciudad}. ${conWeb} con web, ${sinWeb} sin web.`
+          );
+        }
       } catch (err) {
+        if (dianaTaskId) {
+          await notifyDiana(baseUrl, dianaTaskId, userId, "error", `Raúl encontró un error: ${err instanceof Error ? err.message : String(err)}`);
+        }
         emit(controller, encoder, { type: "error", message: err instanceof Error ? err.message : String(err) });
       } finally {
         controller.close();

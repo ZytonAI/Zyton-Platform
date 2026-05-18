@@ -3,6 +3,7 @@ import { getOpenAI } from "@/lib/openai-client";
 import { generateReportHtml } from "@/lib/report-template";
 import { NextResponse } from "next/server";
 import type { WebAnalysis } from "@/types";
+import { notifyDiana } from "@/lib/diana-notify";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -111,6 +112,10 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await request.json().catch(() => ({})) as { diana_task_id?: string };
+  const dianaTaskId = body.diana_task_id ?? null;
+  const baseUrl = new URL(request.url).origin;
 
   const encoder = new TextEncoder();
 
@@ -234,7 +239,20 @@ export async function POST(request: Request) {
           results,
           allDone: false,
         });
+
+        if (dianaTaskId) {
+          await notifyDiana(
+            baseUrl,
+            dianaTaskId,
+            user.id,
+            "done",
+            `Elisa terminó: analizó ${analyzedCount} leads, omitió ${skippedCount}. Los reportes ya están disponibles en la sección de leads.`
+          );
+        }
       } catch (err) {
+        if (dianaTaskId) {
+          await notifyDiana(baseUrl, dianaTaskId, user.id, "error", `Elisa encontró un error: ${err instanceof Error ? err.message : String(err)}`);
+        }
         emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
       } finally {
         controller.close();

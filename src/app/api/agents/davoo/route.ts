@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getOpenAI } from "@/lib/openai-client";
 import { NextResponse } from "next/server";
+import { notifyDiana } from "@/lib/diana-notify";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -32,7 +33,7 @@ async function generateDesignPrompt(
   elisaReportText: string
 ): Promise<string> {
   const completion = await getOpenAI().chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-4o-mini-2024-07-18",
     max_tokens: 4000,
     messages: [
       {
@@ -83,13 +84,17 @@ Sé EXTREMADAMENTE ESPECÍFICO. Menciona detalles reales del negocio, sus servic
   return completion.choices[0]?.message?.content ?? "";
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await request.json().catch(() => ({})) as { diana_task_id?: string };
+  const dianaTaskId = body.diana_task_id ?? null;
+  const baseUrl = new URL(request.url).origin;
 
   const encoder = new TextEncoder();
 
@@ -237,7 +242,20 @@ export async function POST() {
           results,
           allDone: false,
         });
+
+        if (dianaTaskId) {
+          await notifyDiana(
+            baseUrl,
+            dianaTaskId,
+            user.id,
+            "done",
+            `Davoo terminó: generó ${generatedCount} prompts de diseño web, omitió ${skippedCount}. Puedes verlos en los leads de la sección de Agentes.`
+          );
+        }
       } catch (err) {
+        if (dianaTaskId) {
+          await notifyDiana(baseUrl, dianaTaskId, user.id, "error", `Davoo encontró un error: ${err instanceof Error ? err.message : String(err)}`);
+        }
         emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
       } finally {
         controller.close();

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SidebarProvider } from "@/components/layout/SidebarContext";
 import { Toaster } from "@/components/ui/sonner";
+import { DianaWidget } from "@/components/diana/DianaWidget";
 
 export default async function PlatformLayout({
   children,
@@ -26,6 +27,7 @@ export default async function PlatformLayout({
           <main className="flex-1 overflow-auto min-h-0">{children}</main>
         </div>
         <Toaster richColors position="top-right" />
+        <DianaWidget />
       </div>
     </SidebarProvider>
   );
