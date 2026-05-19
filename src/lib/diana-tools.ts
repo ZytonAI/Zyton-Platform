@@ -380,17 +380,17 @@ export async function runTool(
           .select()
           .single();
 
-        if (error) return `Error creando evento: ${error.message}`;
+        if (error) return `❌ FALLÓ crear evento: ${error.message}`;
 
         if (args.lead_id) {
-          await supabase
+          const { error: leadErr } = await supabase
             .from("leads")
             .update({ status: "scheduled" })
             .eq("id", args.lead_id as string)
             .eq("owner_id", ownerId);
+          if (leadErr) return `✅ Evento creado pero ❌ FALLÓ actualizar el lead: ${leadErr.message}`;
         }
 
-        // Registrar en el log para poder deshacer
         await supabase.from("diana_action_log").insert({
           owner_id: ownerId,
           action_type: "create_event",
@@ -400,7 +400,8 @@ export async function runTool(
           new_data: data,
         });
 
-        return JSON.stringify({ success: true, event: data });
+        const leadNote = args.lead_id ? " (vinculado al lead, botón Contactar disponible)" : "";
+        return `✅ Evento creado: "${data.title}" para el ${new Date(data.event_date).toLocaleString("es-CO", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}${leadNote}. ID: ${data.id}`;
       }
 
       case "update_lead_status": {
@@ -420,11 +421,11 @@ export async function runTool(
           .in("id", ids)
           .eq("owner_id", ownerId);
 
-        if (error) return `Error: ${error.message}`;
+        if (error) return `❌ FALLÓ cambiar estado de leads: ${error.message}`;
 
-        // Log de la acción
+        const names = oldLeads?.map((l) => l.name).join(", ") ?? ids.join(", ");
+
         if (oldLeads?.length) {
-          const names = oldLeads.map((l) => l.name).join(", ");
           await supabase.from("diana_action_log").insert({
             owner_id: ownerId,
             action_type: "update_lead_status",
@@ -436,7 +437,7 @@ export async function runTool(
           });
         }
 
-        return JSON.stringify({ success: true, updated: count ?? ids.length });
+        return `✅ Estado cambiado a "${args.status}" para: ${names} (${count ?? ids.length} lead(s) actualizados).`;
       }
 
       case "activate_agent": {
@@ -520,29 +521,27 @@ export async function runTool(
 
         if (error) {
           if (error.message.includes("deleted_at")) {
-            // Schema cache aún no tiene la columna — hard delete como fallback
             const { error: hardErr } = await supabase
               .from("calendar_events")
               .delete()
               .eq("id", eventId)
               .eq("owner_id", ownerId);
-            if (hardErr) return `Error eliminando evento: ${hardErr.message}`;
+            if (hardErr) return `❌ FALLÓ eliminar evento: ${hardErr.message}`;
           } else {
-            return `Error eliminando evento: ${error.message}`;
+            return `❌ FALLÓ eliminar evento: ${error.message}`;
           }
         }
 
-        // Log para poder revertir
         await supabase.from("diana_action_log").insert({
           owner_id: ownerId,
           action_type: "delete_event",
           entity_type: "calendar_event",
           entity_id: eventId,
-          description: `Eliminar evento "${eventData.title}" del ${new Date(eventData.event_date).toLocaleDateString("es-CO")}`,
+          description: `Eliminar evento "${eventData.title}"`,
           old_data: eventData,
         });
 
-        return JSON.stringify({ success: true, deleted_id: eventId, message: "Evento eliminado. Puedes pedirme que lo revierta si fue un error." });
+        return `✅ Evento eliminado: "${eventData.title}". Si fue un error, dime "revierte" y lo restauro.`;
       }
 
       case "undo_last_action": {
@@ -556,53 +555,52 @@ export async function runTool(
           .limit(1)
           .single();
 
-        if (fetchErr || !lastAction) return "No hay acciones recientes que pueda revertir.";
+        if (fetchErr || !lastAction) return "❌ No hay acciones recientes que pueda revertir.";
 
         let revertMsg = "";
 
         if (lastAction.action_type === "delete_event") {
-          // Restaurar evento: quitar deleted_at
           const { error } = await supabase
             .from("calendar_events")
             .update({ deleted_at: null })
             .eq("id", lastAction.entity_id)
             .eq("owner_id", ownerId);
-          if (error) return `Error restaurando evento: ${error.message}`;
-          revertMsg = `Restauré el evento "${lastAction.old_data?.title}".`;
+          if (error) return `❌ FALLÓ restaurar evento: ${error.message}`;
+          revertMsg = `✅ Restauré el evento "${lastAction.old_data?.title}".`;
 
         } else if (lastAction.action_type === "create_event") {
-          // Deshacer creación: soft delete del evento
           const { error } = await supabase
             .from("calendar_events")
             .update({ deleted_at: new Date().toISOString() })
             .eq("id", lastAction.entity_id)
             .eq("owner_id", ownerId);
-          if (error) return `Error eliminando evento creado: ${error.message}`;
-          revertMsg = `Eliminé el evento "${lastAction.new_data?.title}" que acababa de crear.`;
+          if (error) return `❌ FALLÓ deshacer creación: ${error.message}`;
+          revertMsg = `✅ Eliminé el evento "${lastAction.new_data?.title}" que acababa de crear.`;
 
         } else if (lastAction.action_type === "update_lead_status") {
-          // Restaurar estados anteriores de los leads
           const oldLeads = lastAction.old_data?.leads as { id: string; status: string }[] ?? [];
+          let failCount = 0;
           for (const lead of oldLeads) {
-            await supabase
+            const { error } = await supabase
               .from("leads")
               .update({ status: lead.status })
               .eq("id", lead.id)
               .eq("owner_id", ownerId);
+            if (error) failCount++;
           }
-          revertMsg = `Revertí el cambio de estado de ${oldLeads.length} lead(s) al estado anterior.`;
+          if (failCount > 0) return `❌ FALLÓ revertir ${failCount} de ${oldLeads.length} leads.`;
+          revertMsg = `✅ Revertí el estado de ${oldLeads.length} lead(s) al estado anterior.`;
 
         } else {
-          return `No sé cómo revertir una acción de tipo "${lastAction.action_type}".`;
+          return `❌ No sé cómo revertir una acción de tipo "${lastAction.action_type}".`;
         }
 
-        // Marcar la acción como revertida
         await supabase
           .from("diana_action_log")
           .update({ reversed_at: new Date().toISOString() })
           .eq("id", lastAction.id);
 
-        return JSON.stringify({ success: true, message: revertMsg });
+        return revertMsg;
       }
 
       default:
