@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendBridgeFile } from "@/lib/wa-bridge";
+import { sendFileSchema } from "@/lib/validations/chat.schema";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -8,10 +9,11 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { conversation_id, attachment_id } = await request.json();
-  if (!conversation_id || !attachment_id) {
+  const parsed = sendFileSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
     return NextResponse.json({ error: "Faltan campos: conversation_id, attachment_id" }, { status: 400 });
   }
+  const { conversation_id, attachment_id } = parsed.data;
 
   // Obtener conversación
   const { data: conv, error: convErr } = await supabase

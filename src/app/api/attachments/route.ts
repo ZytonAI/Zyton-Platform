@@ -1,5 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+
+const createAttachmentSchema = z.object({
+  entity_type: z.enum(["lead", "client"]),
+  entity_id: z.string().uuid(),
+  file_name: z.string().min(1).max(255),
+  content_type: z.string().max(255).optional(),
+  size_bytes: z.number().int().nonnegative().optional(),
+});
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -31,12 +40,11 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await request.json();
-  const { entity_type, entity_id, file_name, content_type, size_bytes } = body;
-
-  if (!entity_type || !entity_id || !file_name) {
+  const parsed = createAttachmentSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
   }
+  const { entity_type, entity_id, file_name, content_type, size_bytes } = parsed.data;
 
   // Sanitizar el nombre para el path de Storage (sin espacios ni caracteres especiales)
   const safeName = file_name

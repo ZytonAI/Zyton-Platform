@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { sendBridgeMessage } from "@/lib/wa-bridge";
+import { sendMessageSchema } from "@/lib/validations/chat.schema";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -7,10 +8,11 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { conversation_id, body } = await request.json();
-  if (!conversation_id || !body?.trim()) {
+  const parsed = sendMessageSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success || !parsed.data.body.trim()) {
     return NextResponse.json({ error: "Faltan campos: conversation_id, body" }, { status: 400 });
   }
+  const { conversation_id, body } = parsed.data;
 
   // Obtener la conversación
   const { data: conv, error: convErr } = await supabase
