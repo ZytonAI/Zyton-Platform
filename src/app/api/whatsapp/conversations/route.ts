@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { toWaChatId } from "@/lib/phone";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -32,8 +33,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Falta el teléfono" }, { status: 400 });
   const { phone, name, lead_id } = parsed.data;
 
-  const cleanPhone = phone.replace(/\D/g, "");
-  const wa_chat_id = `${cleanPhone}@c.us`;
+  // wa_chat_id canónico (con código de país) para que coincida con el
+  // formato que reporta WhatsApp y no se creen conversaciones duplicadas
+  const wa_chat_id = toWaChatId(phone);
+  const cleanPhone = wa_chat_id.replace("@c.us", "");
 
   const { data, error } = await supabase
     .from("conversations")

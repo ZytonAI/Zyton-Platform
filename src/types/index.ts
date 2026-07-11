@@ -82,6 +82,8 @@ export interface Message {
   media_type: string | null;
   status: MessageStatus;
   created_at: string;
+  /** URL firmada (1 h) generada por la API al listar mensajes con media */
+  media_signed_url?: string;
 }
 
 export interface WaSession {

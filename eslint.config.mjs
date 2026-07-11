@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Servicio Node.js independiente (CommonJS) — se despliega en el VPS, no en Next
+    "whatsapp-service/**",
   ]),
 ]);
 

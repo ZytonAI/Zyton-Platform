@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Send, Loader2, MessageCircle, Plus, FileText, Search, Video, ArrowLeft, ChevronDown } from "lucide-react";
+import { Send, Loader2, MessageCircle, Plus, FileText, Search, Video, ArrowLeft, ChevronDown, Check, CheckCheck, AlertCircle, Download } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,60 @@ import { cn } from "@/lib/utils";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+}
+
+// Etiquetas placeholder que pone el webhook cuando el mensaje es solo media
+const MEDIA_PLACEHOLDERS = new Set(["[Imagen]", "[Audio]", "[Video]", "[Documento]", "[Archivo]"]);
+
+function MessageStatusTicks({ status }: { status: Message["status"] }) {
+  if (status === "read") return <CheckCheck className="w-3.5 h-3.5 text-sky-300" />;
+  if (status === "delivered") return <CheckCheck className="w-3.5 h-3.5 opacity-70" />;
+  if (status === "failed") return <AlertCircle className="w-3.5 h-3.5 text-red-300" />;
+  return <Check className="w-3.5 h-3.5 opacity-70" />;
+}
+
+function MessageMedia({ msg }: { msg: Message }) {
+  if (!msg.media_signed_url) {
+    // Media sin URL firmada (ej: envío fallido sin archivo) — no renderizar nada extra
+    return null;
+  }
+  const mime = msg.media_type ?? "";
+
+  if (mime.startsWith("image/")) {
+    return (
+      <a href={msg.media_signed_url} target="_blank" rel="noopener noreferrer" className="block mb-1">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={msg.media_signed_url}
+          alt="Imagen adjunta"
+          className="rounded-lg max-h-64 max-w-full object-contain"
+          loading="lazy"
+        />
+      </a>
+    );
+  }
+  if (mime.startsWith("audio/")) {
+    return <audio controls src={msg.media_signed_url} className="mb-1 max-w-full" preload="metadata" />;
+  }
+  if (mime.startsWith("video/")) {
+    return <video controls src={msg.media_signed_url} className="rounded-lg max-h-64 max-w-full mb-1" preload="metadata" />;
+  }
+  // Documento u otro tipo — chip de descarga
+  return (
+    <a
+      href={msg.media_signed_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        "flex items-center gap-2 rounded-lg px-2.5 py-2 mb-1 text-xs font-medium",
+        msg.direction === "outbound" ? "bg-white/15 hover:bg-white/25" : "bg-gray-100 hover:bg-gray-200"
+      )}
+    >
+      <FileText className="w-4 h-4 shrink-0" />
+      <span className="truncate">{msg.body.replace(/^📎\s*/, "") || "Documento"}</span>
+      <Download className="w-3.5 h-3.5 shrink-0 ml-auto" />
+    </a>
+  );
 }
 
 interface Props {
@@ -63,7 +117,9 @@ export function MessageThread({ conversation, onBack }: Props) {
   const [attachSearch, setAttachSearch] = useState("");
   const [sendingFile, setSendingFile] = useState(false);
   const [leadStatus, setLeadStatus] = useState<LeadStatus | null>(null);
+  const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
   const fetchMessages = useCallback(async () => {
@@ -78,7 +134,9 @@ export function MessageThread({ conversation, onBack }: Props) {
     if (res.ok) {
       const fresh: Message[] = await res.json();
       setMessages((prev) => {
-        if (fresh.length === prev.length) return prev;
+        // Refrescar también cuando cambian estados (ticks) aunque no cambie la cantidad
+        const signature = (list: Message[]) => list.map((m) => `${m.id}:${m.status}`).join(",");
+        if (signature(fresh) === signature(prev)) return prev;
         return fresh;
       });
     }
@@ -162,6 +220,23 @@ export function MessageThread({ conversation, onBack }: Props) {
           });
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversation.id}`,
+        },
+        (payload) => {
+          // Acks de entregado/leído: actualizar el estado sin perder la URL firmada
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === payload.new.id ? { ...m, status: (payload.new as Message).status } : m
+            )
+          );
+        }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -188,8 +263,16 @@ export function MessageThread({ conversation, onBack }: Props) {
         body: JSON.stringify({ conversation_id: conversation.id, body: text.trim() }),
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         toast.error(err.error ?? "Error enviando mensaje");
+        // La API persiste el intento fallido — mostrarlo con opción de reintentar
+        if (err.message) {
+          const failed: Message = err.message;
+          setMessages((prev) =>
+            prev.some((m) => m.id === failed.id) ? prev : [...prev, failed]
+          );
+          setText("");
+        }
         return;
       }
       const msg: Message = await res.json();
@@ -198,6 +281,32 @@ export function MessageThread({ conversation, onBack }: Props) {
         return exists ? prev : [...prev, msg];
       });
       setText("");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleRetry(msg: Message) {
+    if (sending) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_id: conversation.id,
+          body: msg.body,
+          retry_message_id: msg.id,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Error reintentando el envío");
+        return;
+      }
+      const updated: Message = await res.json();
+      setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      toast.success("Mensaje enviado");
     } finally {
       setSending(false);
     }
@@ -222,8 +331,16 @@ export function MessageThread({ conversation, onBack }: Props) {
         body: JSON.stringify({ conversation_id: conversation.id, attachment_id: attachment.id }),
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         toast.error(err.error ?? "Error enviando archivo");
+        // La API persiste el intento fallido — mostrarlo en el hilo
+        if (err.message) {
+          const failed: Message = err.message;
+          setMessages((prev) =>
+            prev.some((m) => m.id === failed.id) ? prev : [...prev, failed]
+          );
+          setShowAttach(false);
+        }
         return;
       }
       const msg: Message = await res.json();
@@ -235,6 +352,49 @@ export function MessageThread({ conversation, onBack }: Props) {
       toast.success("Archivo enviado");
     } finally {
       setSendingFile(false);
+    }
+  }
+
+  // Subir un archivo del equipo (se guarda como adjunto del lead) y enviarlo directo
+  async function handleUploadAndSend(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !conversation.lead_id) return;
+
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("El archivo es demasiado grande para WhatsApp (máx. 16 MB)");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const res = await fetch("/api/attachments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity_type: "lead",
+          entity_id: conversation.lead_id,
+          file_name: file.name,
+          content_type: file.type || "application/octet-stream",
+          size_bytes: file.size,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Error creando URL de subida");
+
+      const uploadRes = await fetch(json.signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error(`Error subiendo a Storage (${uploadRes.status})`);
+
+      await handleSendFile(json.attachment);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al subir el archivo");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
@@ -297,29 +457,52 @@ export function MessageThread({ conversation, onBack }: Props) {
             <p className="text-sm text-muted-foreground">Ningún mensaje aún</p>
           </div>
         ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn("flex", msg.direction === "outbound" ? "justify-end" : "justify-start")}
-            >
+          messages.map((msg) => {
+            // No repetir el placeholder "[Imagen]" cuando la media ya se renderiza,
+            // ni el "📎 nombre" cuando el chip de documento ya lo muestra
+            const isDocChip =
+              msg.media_signed_url &&
+              !["image/", "audio/", "video/"].some((p) => msg.media_type?.startsWith(p));
+            const hideBody =
+              (msg.media_signed_url && MEDIA_PLACEHOLDERS.has(msg.body)) || isDocChip;
+
+            return (
               <div
-                className={cn(
-                  "max-w-[70%] px-3 py-2 rounded-2xl text-sm shadow-sm",
-                  msg.direction === "outbound"
-                    ? "bg-primary text-primary-foreground rounded-br-sm"
-                    : "bg-white text-gray-900 rounded-bl-sm"
-                )}
+                key={msg.id}
+                className={cn("flex", msg.direction === "outbound" ? "justify-end" : "justify-start")}
               >
-                <p className="leading-relaxed break-words">{msg.body}</p>
-                <p className={cn(
-                  "text-[10px] mt-1 text-right",
-                  msg.direction === "outbound" ? "text-primary-foreground/70" : "text-muted-foreground"
-                )}>
-                  {formatTime(msg.created_at)}
-                </p>
+                <div
+                  className={cn(
+                    "max-w-[70%] px-3 py-2 rounded-2xl text-sm shadow-sm",
+                    msg.direction === "outbound"
+                      ? "bg-primary text-primary-foreground rounded-br-sm"
+                      : "bg-white text-gray-900 rounded-bl-sm",
+                    msg.status === "failed" && "opacity-80 ring-1 ring-red-300"
+                  )}
+                >
+                  <MessageMedia msg={msg} />
+                  {!hideBody && <p className="leading-relaxed break-words">{msg.body}</p>}
+                  <div className={cn(
+                    "flex items-center justify-end gap-1 text-[10px] mt-1",
+                    msg.direction === "outbound" ? "text-primary-foreground/70" : "text-muted-foreground"
+                  )}>
+                    <span>{formatTime(msg.created_at)}</span>
+                    {msg.direction === "outbound" && <MessageStatusTicks status={msg.status} />}
+                  </div>
+                  {msg.status === "failed" && msg.direction === "outbound" && (
+                    <button
+                      type="button"
+                      onClick={() => handleRetry(msg)}
+                      disabled={sending}
+                      className="mt-1 w-full text-center text-[11px] font-semibold text-red-200 hover:text-white underline underline-offset-2 disabled:opacity-50"
+                    >
+                      No se envió — Reintentar
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={bottomRef} />
       </div>
@@ -362,6 +545,22 @@ export function MessageThread({ conversation, onBack }: Props) {
             </p>
           ) : (
             <div className="flex flex-col gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleUploadAndSend}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-center gap-2"
+                disabled={uploading || sendingFile}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {uploading ? "Subiendo y enviando..." : "Subir archivo del equipo"}
+              </Button>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input

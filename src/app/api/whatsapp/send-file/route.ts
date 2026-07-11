@@ -96,20 +96,25 @@ export async function POST(request: Request) {
     mimeType = attachment.content_type ?? "application/octet-stream";
   }
 
+  const body = `📎 ${fileName}`;
+  // media_type real del archivo (los HTML se convierten a PDF en el bridge);
+  // media_url con convención bucket/path para que el hilo pueda renderizarlo
+  const sentMediaType = isHtml ? "application/pdf" : (attachment.content_type ?? "application/octet-stream");
+  const sentMediaUrl = isHtml || !attachment.storage_path ? null : `attachments/${attachment.storage_path}`;
+
   try {
     const sent = await sendBridgeFile(conv.wa_chat_id, base64, mimeType, fileName);
-
-    const body = `📎 ${fileName}`;
 
     const { data: msg, error: msgErr } = await supabase
       .from("messages")
       .insert({
         owner_id: user.id,
         conversation_id,
-        wa_message_id: sent.wa_message_id,
+        wa_message_id: sent.wa_message_id || null,
         direction: "outbound",
         body,
-        media_type: "application/pdf",
+        media_url: sentMediaUrl,
+        media_type: sentMediaType,
         status: "sent",
       })
       .select()
@@ -125,6 +130,23 @@ export async function POST(request: Request) {
     return NextResponse.json(msg, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error enviando archivo";
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    // Persistir el intento como "failed" para que no desaparezca de la UI
+    const { data: failedMsg } = await supabase
+      .from("messages")
+      .insert({
+        owner_id: user.id,
+        conversation_id,
+        wa_message_id: null,
+        direction: "outbound",
+        body,
+        media_url: sentMediaUrl,
+        media_type: sentMediaType,
+        status: "failed",
+      })
+      .select()
+      .single();
+
+    return NextResponse.json({ error: message, message: failedMsg }, { status: 500 });
   }
 }
