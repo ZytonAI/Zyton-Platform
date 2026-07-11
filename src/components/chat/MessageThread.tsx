@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { LEAD_STATUS, LEAD_STATUS_ORDER } from "@/lib/status-config";
 import type { Conversation, Message, FileAttachment } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +70,7 @@ function MessageMedia({ msg }: { msg: Message }) {
       rel="noopener noreferrer"
       className={cn(
         "flex items-center gap-2 rounded-lg px-2.5 py-2 mb-1 text-xs font-medium",
-        msg.direction === "outbound" ? "bg-white/15 hover:bg-white/25" : "bg-gray-100 hover:bg-gray-200"
+        msg.direction === "outbound" ? "bg-white/15 hover:bg-white/25" : "bg-muted hover:bg-muted/70"
       )}
     >
       <FileText className="w-4 h-4 shrink-0" />
@@ -85,26 +86,6 @@ interface Props {
 }
 
 type LeadStatus = "new" | "contacted" | "scheduled" | "qualified" | "lost" | "converted";
-
-const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
-  new:       "Sin contactar",
-  contacted: "Contactado",
-  scheduled: "Programado",
-  qualified: "Interesado",
-  lost:      "No interesado",
-  converted: "Compró",
-};
-
-const LEAD_STATUS_COLORS: Record<LeadStatus, string> = {
-  new:       "bg-gray-100 text-gray-600",
-  contacted: "bg-blue-100 text-blue-700",
-  scheduled: "bg-amber-100 text-amber-700",
-  qualified: "bg-emerald-100 text-emerald-700",
-  lost:      "bg-red-100 text-red-700",
-  converted: "bg-purple-100 text-purple-700",
-};
-
-const LEAD_STATUS_ORDER: LeadStatus[] = ["new", "contacted", "scheduled", "qualified", "lost", "converted"];
 
 export function MessageThread({ conversation, onBack }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -196,7 +177,7 @@ export function MessageThread({ conversation, onBack }: Props) {
     });
     if (res.ok) {
       setLeadStatus(status);
-      toast.success(`Lead: ${LEAD_STATUS_LABELS[status]}`);
+      toast.success(`Lead: ${LEAD_STATUS[status].label}`);
     }
   }
 
@@ -403,13 +384,13 @@ export function MessageThread({ conversation, onBack }: Props) {
   );
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-muted/60">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-white border-b">
+      <div className="flex items-center gap-3 px-4 py-3 bg-card border-b">
         {onBack && (
           <button
             onClick={onBack}
-            className="md:hidden p-1.5 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
+            className="md:hidden p-1.5 -ml-1 rounded-lg text-muted-foreground hover:bg-muted transition-colors shrink-0"
             aria-label="Volver a conversaciones"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -419,7 +400,7 @@ export function MessageThread({ conversation, onBack }: Props) {
           {(conversation.contact_name ?? conversation.contact_phone).slice(0, 2).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm text-gray-900">
+          <p className="font-semibold text-sm text-foreground">
             {conversation.contact_name ?? conversation.contact_phone}
           </p>
           {conversation.contact_name && (
@@ -430,15 +411,15 @@ export function MessageThread({ conversation, onBack }: Props) {
         {/* Dropdown estado del lead — siempre visible */}
         <DropdownMenu>
           <DropdownMenuTrigger
-            className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border hover:opacity-80 outline-none transition-opacity ${leadStatus ? LEAD_STATUS_COLORS[leadStatus] : "bg-gray-100 text-gray-500 border-gray-200"}`}
+            className={`shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border hover:opacity-80 outline-none transition-opacity ${leadStatus ? LEAD_STATUS[leadStatus].badgeClass : "bg-muted text-muted-foreground border-border"}`}
           >
-            {leadStatus ? LEAD_STATUS_LABELS[leadStatus] : "Estado"}
+            {leadStatus ? LEAD_STATUS[leadStatus].label : "Estado"}
             <ChevronDown className="w-3 h-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {LEAD_STATUS_ORDER.filter((s) => s !== leadStatus).map((s) => (
               <DropdownMenuItem key={s} onClick={() => handleChangeLeadStatus(s)}>
-                {LEAD_STATUS_LABELS[s]}
+                {LEAD_STATUS[s].label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -476,7 +457,7 @@ export function MessageThread({ conversation, onBack }: Props) {
                     "max-w-[70%] px-3 py-2 rounded-2xl text-sm shadow-sm",
                     msg.direction === "outbound"
                       ? "bg-primary text-primary-foreground rounded-br-sm"
-                      : "bg-white text-gray-900 rounded-bl-sm",
+                      : "bg-card text-card-foreground rounded-bl-sm",
                     msg.status === "failed" && "opacity-80 ring-1 ring-red-300"
                   )}
                 >
@@ -508,7 +489,7 @@ export function MessageThread({ conversation, onBack }: Props) {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSend} className="flex items-center gap-2 px-4 py-3 bg-white border-t">
+      <form onSubmit={handleSend} className="flex items-center gap-2 px-4 py-3 bg-card border-t">
         <Button
           type="button"
           variant="outline"
@@ -541,7 +522,7 @@ export function MessageThread({ conversation, onBack }: Props) {
           {!conversation.lead_id ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
               Esta conversación no está vinculada a ningún lead.<br />
-              Usa el botón "Contactar" desde la sección Leads para vincularla.
+              Usa el botón &quot;Contactar&quot; desde la sección Leads para vincularla.
             </p>
           ) : (
             <div className="flex flex-col gap-3">
@@ -605,7 +586,7 @@ export function MessageThread({ conversation, onBack }: Props) {
                         onClick={() => !over16mb && handleSendFile(att)}
                         disabled={sendingFile || over16mb}
                         title={over16mb ? "Archivo demasiado grande para WhatsApp (máx. 16 MB)" : undefined}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${attIsVideo ? "bg-purple-50" : "bg-red-50"}`}>
                           {attIsVideo
@@ -614,7 +595,7 @@ export function MessageThread({ conversation, onBack }: Props) {
                           }
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+                          <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
                           <p className="text-xs text-muted-foreground">
                             {attIsHtml
                               ? "Informe — se enviará como PDF"

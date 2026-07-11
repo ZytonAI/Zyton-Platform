@@ -1,7 +1,105 @@
 import { createClient } from "@/lib/supabase/server";
 import { TopBar } from "@/components/layout/TopBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Briefcase, TrendingUp, MessageCircle, Receipt, CalendarDays } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Users, Briefcase, TrendingUp, MessageCircle, Receipt, CalendarDays,
+  Plus, AlertTriangle,
+} from "lucide-react";
+import Link from "next/link";
+
+function formatAmount(n: number) {
+  return `$${n.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`;
+}
+
+// Rangos de fechas para las queries del dashboard (componente server:
+// se calculan una vez por request, fuera del análisis del compilador de React)
+function getDateRanges() {
+  const now = Date.now();
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1);
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+  return {
+    now,
+    eightWeeksAgo: new Date(now - 8 * 7 * 86_400_000).toISOString(),
+    sixMonthsAgoStr: sixMonthsAgo.toISOString().split("T")[0],
+    in30days: new Date(now + 30 * 86_400_000).toISOString().split("T")[0],
+    todayStr: new Date(now).toISOString().split("T")[0],
+    startOfTodayIso: startOfToday.toISOString(),
+  };
+}
+
+/** Cubetas semanales (últimas 8) de leads creados */
+function buildWeekBuckets(now: number, recentLeads: { created_at: string }[]) {
+  const buckets: { label: string; value: number }[] = [];
+  for (let w = 7; w >= 0; w--) {
+    const start = new Date(now - (w + 1) * 7 * 86_400_000);
+    const end = new Date(now - w * 7 * 86_400_000);
+    const count = recentLeads.filter((l) => {
+      const t = new Date(l.created_at).getTime();
+      return t >= start.getTime() && t < end.getTime();
+    }).length;
+    buckets.push({
+      label: end.toLocaleDateString("es-ES", { day: "2-digit", month: "short" }),
+      value: count,
+    });
+  }
+  return buckets;
+}
+
+/** Cubetas mensuales (últimos 6): pagado vs pendiente */
+function buildMonthBuckets(invoices: { amount: number; status: string; due_date: string }[]) {
+  const buckets: { label: string; value: number; secondary: number }[] = [];
+  for (let m = 5; m >= 0; m--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - m);
+    const key = d.toISOString().slice(0, 7);
+    const monthInvoices = invoices.filter((i) => i.due_date.startsWith(key));
+    buckets.push({
+      label: d.toLocaleDateString("es-ES", { month: "short" }),
+      value: monthInvoices.filter((i) => i.status === "paid").reduce((a, i) => a + Number(i.amount), 0),
+      secondary: monthInvoices.filter((i) => i.status !== "paid").reduce((a, i) => a + Number(i.amount), 0),
+    });
+  }
+  return buckets;
+}
+
+/** Mini gráfico de barras sin dependencias (server-rendered) */
+function MiniBars({
+  data, accentClass = "bg-primary",
+}: {
+  data: { label: string; value: number; secondary?: number }[];
+  accentClass?: string;
+}) {
+  const max = Math.max(1, ...data.map((d) => Math.max(d.value, d.secondary ?? 0)));
+  return (
+    <div className="flex items-end gap-2 h-28">
+      {data.map((d, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+          <div className="w-full flex items-end justify-center gap-0.5 flex-1">
+            <div
+              className={`w-full max-w-6 rounded-t-md ${accentClass} transition-all`}
+              style={{ height: `${Math.max(3, (d.value / max) * 100)}%` }}
+              title={`${d.label}: ${d.value}`}
+            />
+            {d.secondary !== undefined && (
+              <div
+                className="w-full max-w-6 rounded-t-md bg-muted-foreground/25"
+                style={{ height: `${Math.max(3, (d.secondary / max) * 100)}%` }}
+                title={`${d.label}: ${d.secondary}`}
+              />
+            )}
+          </div>
+          <span className="text-[9px] text-muted-foreground font-medium truncate w-full text-center">
+            {d.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -9,7 +107,13 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [leadsRes, clientsRes, messagesRes, convertedRes, upcomingInvoicesRes, upcomingEventsRes] = await Promise.all([
+  const { now, eightWeeksAgo, sixMonthsAgoStr, in30days, todayStr, startOfTodayIso } = getDateRanges();
+
+  const [
+    leadsRes, clientsRes, messagesRes, convertedRes,
+    upcomingInvoicesRes, upcomingEventsRes,
+    recentLeadsRes, invoicesHistoryRes, expiringContractsRes, overdueRes,
+  ] = await Promise.all([
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
@@ -40,9 +144,37 @@ export default async function DashboardPage() {
       .select("id, title, event_date, type, status")
       .eq("owner_id", user!.id)
       .eq("status", "pending")
-      .gte("event_date", (() => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d.toISOString(); })())
+      .gte("event_date", startOfTodayIso)
       .order("event_date", { ascending: true })
       .limit(3),
+    supabase
+      .from("leads")
+      .select("created_at")
+      .eq("owner_id", user!.id)
+      .gte("created_at", eightWeeksAgo)
+      .limit(2000),
+    supabase
+      .from("invoices")
+      .select("amount, status, due_date")
+      .eq("owner_id", user!.id)
+      .gte("due_date", sixMonthsAgoStr)
+      .limit(2000),
+    supabase
+      .from("clients")
+      .select("id, name, contract_end")
+      .eq("owner_id", user!.id)
+      .eq("status", "active")
+      .not("contract_end", "is", null)
+      .gte("contract_end", todayStr)
+      .lte("contract_end", in30days)
+      .order("contract_end", { ascending: true })
+      .limit(5),
+    supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user!.id)
+      .neq("status", "paid")
+      .lt("due_date", todayStr),
   ]);
 
   const totalLeads = leadsRes.count ?? 0;
@@ -53,54 +185,101 @@ export default async function DashboardPage() {
     totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0;
   const upcomingInvoices = upcomingInvoicesRes.data ?? [];
   const upcomingEvents = upcomingEventsRes.data ?? [];
+  const expiringContracts = expiringContractsRes.data ?? [];
+  const overdueCount = overdueRes.count ?? 0;
+
+  // ── Leads por semana (últimas 8) ──
+  const weekBuckets = buildWeekBuckets(now, recentLeadsRes.data ?? []);
+  const leadsThisWeek = weekBuckets[weekBuckets.length - 1]?.value ?? 0;
+
+  // ── Facturas por mes: pagado vs pendiente (últimos 6) ──
+  const monthBuckets = buildMonthBuckets(invoicesHistoryRes.data ?? []);
 
   const stats = [
     {
       title: "Leads totales",
       value: totalLeads.toString(),
-      description: `${convertedLeads} convertidos`,
+      description: leadsThisWeek > 0 ? `+${leadsThisWeek} esta semana` : `${convertedLeads} convertidos`,
       icon: Users,
-      color: "text-blue-600",
-      bg: "bg-blue-50",
+      color: "text-blue-600 dark:text-blue-400",
+      bg: "bg-blue-50 dark:bg-blue-500/15",
     },
     {
       title: "Clientes activos",
       value: activeClients.toString(),
-      description: "Estado: activo",
+      description: expiringContracts.length > 0 ? `${expiringContracts.length} contrato(s) por vencer` : "Estado: activo",
       icon: Briefcase,
-      color: "text-emerald-600",
-      bg: "bg-emerald-50",
+      color: "text-emerald-600 dark:text-emerald-400",
+      bg: "bg-emerald-50 dark:bg-emerald-500/15",
     },
     {
       title: "Tasa de conversión",
       value: `${conversionRate}%`,
       description: `${convertedLeads} de ${totalLeads} leads`,
       icon: TrendingUp,
-      color: "text-violet-600",
-      bg: "bg-violet-50",
+      color: "text-violet-600 dark:text-violet-400",
+      bg: "bg-violet-50 dark:bg-violet-500/15",
     },
     {
       title: "Mensajes WhatsApp",
       value: totalMessages.toString(),
       description: "Total acumulado",
       icon: MessageCircle,
-      color: "text-amber-600",
-      bg: "bg-amber-50",
+      color: "text-amber-600 dark:text-amber-400",
+      bg: "bg-amber-50 dark:bg-amber-500/15",
     },
   ];
+
+  const needsAttention = overdueCount > 0 || expiringContracts.length > 0;
 
   return (
     <>
       <TopBar title="Dashboard" userEmail={user?.email} />
       <div className="p-6 space-y-6">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">
-            Bienvenido a Zyton Platform
-          </h2>
-          <p className="text-muted-foreground mt-1">
-            Tu hub centralizado para gestionar leads, clientes y comunicaciones.
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">
+              Bienvenido a Zyton Platform
+            </h2>
+            <p className="text-muted-foreground mt-1">
+              Tu hub centralizado para gestionar leads, clientes y comunicaciones.
+            </p>
+          </div>
+          {/* Acciones rápidas */}
+          <div className="flex gap-2">
+            <Button render={<Link href="/leads" />} size="sm" variant="outline" className="gap-1.5 rounded-xl">
+              <Plus className="w-4 h-4" /> Nuevo lead
+            </Button>
+            <Button render={<Link href="/invoices" />} size="sm" variant="outline" className="gap-1.5 rounded-xl">
+              <Receipt className="w-4 h-4" /> Facturas
+            </Button>
+            <Button render={<Link href="/chat" />} size="sm" className="gap-1.5 rounded-xl">
+              <MessageCircle className="w-4 h-4" /> Ir al chat
+            </Button>
+          </div>
         </div>
+
+        {/* Card de atención */}
+        {needsAttention && (
+          <Card className="border-0 shadow-sm ring-1 ring-amber-200 dark:ring-amber-500/30 bg-amber-50/50 dark:bg-amber-500/[0.07]">
+            <CardContent className="py-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-semibold text-sm">
+                <AlertTriangle className="w-4 h-4" /> Requiere atención
+              </div>
+              {overdueCount > 0 && (
+                <Link href="/invoices" className="text-sm text-foreground hover:underline">
+                  {overdueCount} factura{overdueCount !== 1 ? "s" : ""} vencida{overdueCount !== 1 ? "s" : ""} sin pagar
+                </Link>
+              )}
+              {expiringContracts.map((c) => (
+                <Link key={c.id} href={`/clients/${c.id}`} className="text-sm text-foreground hover:underline">
+                  Contrato de {c.name} vence el{" "}
+                  {new Date(c.contract_end + "T00:00:00").toLocaleDateString("es-ES", { day: "2-digit", month: "short" })}
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {stats.map((stat) => (
@@ -116,13 +295,52 @@ export default async function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {stat.description}
                 </p>
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        {/* ── Mini gráficos ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Leads nuevos por semana
+                </CardTitle>
+                <Users className="w-4 h-4 text-blue-500" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <MiniBars data={weekBuckets} accentClass="bg-primary" />
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Facturas por mes — pagado vs pendiente
+                </CardTitle>
+                <Receipt className="w-4 h-4 text-emerald-500" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <MiniBars data={monthBuckets} accentClass="bg-emerald-500" />
+              <div className="flex items-center gap-4 mt-2">
+                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Pagado
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-muted-foreground/25 inline-block" /> Pendiente
+                </span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -141,8 +359,9 @@ export default async function DashboardPage() {
               ) : (
                 upcomingInvoices.map((inv) => (
                   <div key={inv.id} className="flex items-center justify-between text-sm">
-                    <span className="truncate font-medium max-w-[55%]">{inv.title}</span>
+                    <span className="truncate font-medium max-w-[45%]">{inv.title}</span>
                     <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono text-xs tabular-nums">{formatAmount(Number(inv.amount))}</span>
                       <span className="text-muted-foreground text-xs">
                         {new Date(inv.due_date + "T00:00:00").toLocaleDateString("es-ES", {
                           day: "2-digit",
@@ -151,12 +370,12 @@ export default async function DashboardPage() {
                       </span>
                       <span
                         className={`text-xs font-medium ${
-                          inv.status === "overdue"
-                            ? "text-red-600"
-                            : "text-yellow-600"
+                          inv.status === "overdue" || inv.due_date < todayStr
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-amber-600 dark:text-amber-400"
                         }`}
                       >
-                        {inv.status === "overdue" ? "Vencida" : "Pendiente"}
+                        {inv.status === "overdue" || inv.due_date < todayStr ? "Vencida" : "Pendiente"}
                       </span>
                     </div>
                   </div>

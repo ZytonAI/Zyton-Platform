@@ -138,10 +138,10 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-6">
-            <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
               <MessageCircle className="w-7 h-7 text-primary" />
             </div>
-            <h3 className="font-semibold text-gray-900">Selecciona una conversación</h3>
+            <h3 className="font-semibold text-foreground">Selecciona una conversación</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Elige un contacto de la lista para ver los mensajes
             </p>
