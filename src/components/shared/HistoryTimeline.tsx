@@ -37,7 +37,7 @@ export function HistoryTimeline({ events }: Props) {
             {EVENT_ICONS[event.event_type] ?? "📌"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-800">{event.description}</p>
+            <p className="text-sm text-foreground whitespace-pre-wrap">{event.description}</p>
             <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
               <Clock className="w-3 h-3" />
               {formatDate(event.created_at)}

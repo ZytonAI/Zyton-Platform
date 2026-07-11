@@ -18,7 +18,8 @@ export async function GET() {
     .from("conversations")
     .select("*")
     .eq("owner_id", user.id)
-    .order("last_message_at", { ascending: false, nullsFirst: false });
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(500);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data ?? []);

@@ -30,9 +30,10 @@ interface Props {
   onClose: () => void;
   onSave: (data: Invoice) => void;
   initialData?: Invoice;
+  clients?: { id: string; name: string }[];
 }
 
-export function InvoiceForm({ open, onClose, onSave, initialData }: Props) {
+export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }: Props) {
   const isEdit = !!initialData;
 
   const {
@@ -52,6 +53,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData }: Props) {
       status:              initialData?.status ?? "pending",
       is_recurring:        initialData?.is_recurring ?? false,
       recurrence_interval: initialData?.recurrence_interval ?? null,
+      client_id:           initialData?.client_id ?? null,
       notes:               initialData?.notes ?? "",
     },
   });
@@ -59,6 +61,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData }: Props) {
   const status = watch("status");
   const isRecurring = watch("is_recurring");
   const recurrenceInterval = watch("recurrence_interval");
+  const clientId = watch("client_id");
 
   async function onSubmit(data: InvoiceFormData) {
     const url = isEdit ? `/api/invoices/${initialData.id}` : "/api/invoices";
@@ -144,6 +147,26 @@ export function InvoiceForm({ open, onClose, onSave, initialData }: Props) {
                 </SelectContent>
               </Select>
             </div>
+
+            {clients.length > 0 && (
+              <div className="col-span-2 space-y-1">
+                <Label>Cliente <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                <Select
+                  value={clientId ?? "none"}
+                  onValueChange={(v) => setValue("client_id", v === "none" ? null : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sin cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin cliente — gasto general</SelectItem>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Recurrencia */}
             <div className="col-span-2 rounded-lg border p-3 space-y-3">

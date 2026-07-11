@@ -7,7 +7,7 @@ export default async function ClientsPage() {
   const supabase = await createClient();
   const [{ data: { user } }, { data: clients }] = await Promise.all([
     supabase.auth.getUser(),
-    supabase.from("clients").select("*").order("created_at", { ascending: false }),
+    supabase.from("clients").select("*").order("created_at", { ascending: false }).limit(1000),
   ]);
 
   return (

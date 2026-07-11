@@ -21,7 +21,8 @@ export default async function ChatPage({
     .from("conversations")
     .select("*")
     .eq("owner_id", user!.id)
-    .order("last_message_at", { ascending: false, nullsFirst: false });
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(500);
 
   return (
     <div className="flex flex-col h-screen">

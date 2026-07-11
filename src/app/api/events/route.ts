@@ -10,7 +10,8 @@ export async function GET() {
   const { data, error } = await supabase
     .from("calendar_events")
     .select("*")
-    .order("event_date", { ascending: true });
+    .order("event_date", { ascending: true })
+    .limit(1000);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);

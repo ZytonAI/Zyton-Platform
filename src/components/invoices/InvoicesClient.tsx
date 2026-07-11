@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   initialInvoices: Invoice[];
+  clients?: { id: string; name: string }[];
 }
 
 const FILTERS: { label: string; value: string }[] = [
@@ -63,7 +64,11 @@ function isOverdue(inv: Invoice): boolean {
   return inv.due_date < new Date().toISOString().split("T")[0];
 }
 
-export function InvoicesClient({ initialInvoices }: Props) {
+export function InvoicesClient({ initialInvoices, clients = [] }: Props) {
+  const clientNames = useMemo(
+    () => Object.fromEntries(clients.map((c) => [c.id, c.name])),
+    [clients]
+  );
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -233,6 +238,7 @@ export function InvoicesClient({ initialInvoices }: Props) {
             <TableRow className="bg-muted/50">
               <TableHead>Título</TableHead>
               <TableHead className="text-right">Monto</TableHead>
+              <TableHead>Cliente</TableHead>
               <TableHead>Categoría</TableHead>
               <TableHead>Fecha de pago</TableHead>
               <TableHead>Recurrencia</TableHead>
@@ -244,7 +250,7 @@ export function InvoicesClient({ initialInvoices }: Props) {
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="text-center text-muted-foreground py-12"
                 >
                   {search
@@ -264,6 +270,15 @@ export function InvoicesClient({ initialInvoices }: Props) {
                   <TableCell className="font-medium">{invoice.title}</TableCell>
                   <TableCell className="font-mono text-sm text-right tabular-nums">
                     {formatAmount(invoice.amount)}
+                  </TableCell>
+                  <TableCell>
+                    {invoice.client_id && clientNames[invoice.client_id] ? (
+                      <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                        {clientNames[invoice.client_id]}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {invoice.category ?? "—"}
@@ -336,6 +351,7 @@ export function InvoicesClient({ initialInvoices }: Props) {
         }}
         onSave={handleSaved}
         initialData={editInvoice}
+        clients={clients}
       />
 
       <ConfirmDialog

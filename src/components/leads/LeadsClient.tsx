@@ -201,6 +201,30 @@ export function LeadsClient({ initialLeads }: Props) {
     }
   }
 
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+
+  async function handleConvert(lead: Lead) {
+    if (convertingId) return;
+    setConvertingId(lead.id);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/convert`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(typeof err.error === "string" ? err.error : "Error convirtiendo el lead");
+        return;
+      }
+      const { client } = await res.json().catch(() => ({ client: null }));
+      setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, status: "converted" as LeadStatus } : l));
+      toast.success(`${lead.name} convertido a cliente`, {
+        action: client?.id
+          ? { label: "Ver cliente", onClick: () => router.push(`/clients/${client.id}`) }
+          : undefined,
+      });
+    } finally {
+      setConvertingId(null);
+    }
+  }
+
   async function handleDelete() {
     if (!deletingId) return;
     setDeleteLoading(true);
@@ -374,6 +398,15 @@ export function LeadsClient({ initialLeads }: Props) {
                           })}
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
+                      {lead.status !== "converted" && lead.status !== "lost" && (
+                        <DropdownMenuItem
+                          onClick={() => handleConvert(lead)}
+                          disabled={convertingId === lead.id}
+                        >
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          {convertingId === lead.id ? "Convirtiendo..." : "Convertir a cliente"}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => { setEditLead(lead); setShowForm(true); }}>
                         <Pencil className="w-4 h-4 mr-2" /> Editar
