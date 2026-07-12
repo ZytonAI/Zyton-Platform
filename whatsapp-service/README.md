@@ -77,6 +77,24 @@ y confiable que dejar que Puppeteer descargue el suyo). En EasyPanel:
 5. **Puerto**: exponer `3001` (o el valor de `PORT`) y apuntar `WA_BRIDGE_URL` en Vercel
    a la URL pública que te dé EasyPanel.
 
+## Solución de problemas
+
+**"No se puede vincular el dispositivo" al escanear el QR**: casi siempre es un
+desfase de versión entre `whatsapp-web.js` y la versión de WhatsApp Web que WhatsApp
+está sirviendo en ese momento (pasa cuando WhatsApp actualiza su web client y la
+librería se queda vieja). El `Client` ya está configurado con
+`webVersionCache: { type: "none" }` para evitar quedarse pegado a una versión
+cacheada, pero si el problema persiste:
+
+1. Confirmá que estás en la última versión: `npm install whatsapp-web.js@latest` y
+   redeploy.
+2. Si ya habías intentado escanear el QR sin éxito, borrá el contenido del volumen
+   persistente (`WA_SESSION_PATH`, ej. `/app/.wwebjs_auth`) antes de reintentar —
+   puede quedar un estado de sesión a medio autenticar que confunde al cliente.
+3. Volvé a pedir el QR con `POST /disconnect` seguido de `POST /reconnect` (o
+   reiniciá el contenedor) y escaneá uno recién generado — los QR expiran rápido
+   (~30-60s).
+
 ## Endpoints
 
 Todos exigen el header `x-bridge-token: $BRIDGE_TOKEN` (401 sin él).

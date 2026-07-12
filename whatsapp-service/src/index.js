@@ -39,6 +39,11 @@ function buildClient() {
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
     },
+    // Sin esto, whatsapp-web.js puede quedar pegado a una versión vieja de
+    // WhatsApp Web (cacheada en disco o remota) y WhatsApp rechaza el
+    // pairing con "no se puede vincular el dispositivo". "none" fuerza a
+    // tomar siempre la versión que WhatsApp está sirviendo en ese momento.
+    webVersionCache: { type: "none" },
   });
 }
 
