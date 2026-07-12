@@ -1,69 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { resetRecurringInvoices } from "@/lib/recurring-invoices";
 
 export const dynamic = "force-dynamic";
-
-// Suma un intervalo de recurrencia a una fecha (YYYY-MM-DD), con clamping
-// de fin de mes (ej: 31 ene + 1 mes → 28/29 feb, no 3 mar)
-function addInterval(dateStr: string, interval: string): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const addDays = (days: number) => {
-    const date = new Date(Date.UTC(y, m - 1, d + days));
-    return date.toISOString().split("T")[0];
-  };
-  const addMonths = (months: number) => {
-    const target = new Date(Date.UTC(y, m - 1 + months, 1));
-    const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
-    target.setUTCDate(Math.min(d, lastDay));
-    return target.toISOString().split("T")[0];
-  };
-  switch (interval) {
-    case "weekly":     return addDays(7);
-    case "biweekly":   return addDays(14);
-    case "monthly":    return addMonths(1);
-    case "bimonthly":  return addMonths(2);
-    case "quarterly":  return addMonths(3);
-    case "semiannual": return addMonths(6);
-    case "annual":     return addMonths(12);
-    default:           return addMonths(1);
-  }
-}
-
-type ServiceClient = ReturnType<typeof createServiceClient>;
-
-// Facturas recurrentes ya pagadas cuyo período se cumplió (due_date <= hoy):
-// se reinicia LA MISMA factura a "pendiente" con la fecha de pago avanzada
-// al siguiente período (mensual, quincenal, etc.) — es un pago que se repite
-// cada mes, no una factura nueva cada vez. Si sigue sin pagar, se queda
-// "overdue" recordando la deuda hasta que la marquen pagada; recién ahí, en
-// la siguiente corrida del cron, se recicla al período que sigue.
-async function resetRecurringInvoices(supabase: ServiceClient, todayStr: string): Promise<number> {
-  const { data: recurring } = await supabase
-    .from("invoices")
-    .select("id, due_date, recurrence_interval")
-    .eq("is_recurring", true)
-    .eq("status", "paid")
-    .not("recurrence_interval", "is", null)
-    .lte("due_date", todayStr)
-    .limit(500);
-
-  if (!recurring?.length) return 0;
-
-  let updated = 0;
-  for (const inv of recurring) {
-    const { error } = await supabase
-      .from("invoices")
-      .update({
-        due_date: addInterval(inv.due_date, inv.recurrence_interval!),
-        status: "pending",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", inv.id)
-      .eq("status", "paid"); // seguridad: solo si sigue "paid" al momento del update
-    if (!error) updated++;
-  }
-  return updated;
-}
 
 export async function GET(request: Request) {
   // Vercel Cron envía Authorization: Bearer {CRON_SECRET}
@@ -81,6 +20,8 @@ export async function GET(request: Request) {
   const todayStr = today.toISOString().split("T")[0];
 
   // 1. Reciclar facturas recurrentes ya pagadas cuyo período se cumplió
+  //    (red de seguridad diaria — lo mismo corre en tiempo real al cargar
+  //    la página de Facturas, ver src/lib/recurring-invoices.ts)
   let recurringReset = 0;
   try {
     recurringReset = await resetRecurringInvoices(supabase, todayStr);
