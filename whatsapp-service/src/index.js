@@ -83,10 +83,11 @@ function wireClientEvents(c) {
 
   // ── Mensajes entrantes → webhook de la plataforma ──
   c.on("message", async (msg) => {
+    console.log(`Mensaje entrante: type=${msg.type} hasMedia=${msg.hasMedia} from=${msg.from} id=${msg.id?._serialized}`);
     try {
       await forwardIncomingMessage(msg);
     } catch (err) {
-      console.error("Error reenviando mensaje al webhook:", err.message);
+      console.error("Error reenviando mensaje al webhook:", err.message, err.stack);
     }
   });
 
@@ -134,9 +135,13 @@ async function forwardIncomingMessage(msg) {
     payload.body = `👤 Contacto compartido:\n${msg.body || msg.vCards?.join("\n") || ""}`.trim();
   } else if (msg.hasMedia) {
     // Imagen, video, audio/nota de voz, documento, sticker
-    const media = await msg.downloadMedia().catch(() => null);
+    const media = await msg.downloadMedia().catch((err) => {
+      console.error(`downloadMedia falló para id=${msg.id._serialized} (type=${msg.type}):`, err.message);
+      return null;
+    });
     if (media?.data) {
       const rawBytes = Buffer.byteLength(media.data, "base64");
+      console.log(`Media descargada: id=${msg.id._serialized} mime=${media.mimetype} bytes=${rawBytes}`);
       if (rawBytes <= MAX_MEDIA_BYTES) {
         payload.media_base64 = media.data;
         payload.media_mime = media.mimetype;
@@ -144,8 +149,9 @@ async function forwardIncomingMessage(msg) {
       } else if (!payload.body) {
         payload.body = "[Archivo demasiado grande]";
       }
-    } else if (!payload.body) {
-      payload.body = "[Archivo no disponible]";
+    } else {
+      console.warn(`downloadMedia no devolvió datos para id=${msg.id._serialized} (type=${msg.type})`);
+      if (!payload.body) payload.body = "[Archivo no disponible]";
     }
   }
 
@@ -160,7 +166,10 @@ async function forwardIncomingMessage(msg) {
 // reintentan porque reintentar no los va a arreglar, pero SIEMPRE se
 // registran — antes se descartaban en silencio y no quedaba rastro.
 async function postWebhook(payload, attempt = 1) {
-  if (!WEBHOOK_URL) return;
+  if (!WEBHOOK_URL) {
+    console.warn("WEBHOOK_URL no está definido — no se reenvía nada.");
+    return;
+  }
   try {
     const res = await fetch(WEBHOOK_URL, {
       method: "POST",
@@ -178,6 +187,8 @@ async function postWebhook(payload, attempt = 1) {
       console.error(
         `Webhook rechazó el mensaje (wa_message_id=${payload.wa_message_id}): HTTP ${res.status} — ${bodyText.slice(0, 300)}`
       );
+    } else {
+      console.log(`Webhook OK: wa_message_id=${payload.wa_message_id} type=${payload.type} hasMedia=${!!payload.media_base64}`);
     }
   } catch (err) {
     if (attempt < 3) {
