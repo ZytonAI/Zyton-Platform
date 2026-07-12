@@ -2,15 +2,24 @@ const WA_BRIDGE_URL = process.env.WA_BRIDGE_URL!;
 const WA_BRIDGE_TOKEN = process.env.WA_BRIDGE_TOKEN!;
 
 async function bridgeFetch(path: string, options: RequestInit = {}) {
-  const res = await fetch(`${WA_BRIDGE_URL}${path}`, {
-    ...options,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      "x-bridge-token": WA_BRIDGE_TOKEN,
-      ...(options.headers ?? {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${WA_BRIDGE_URL}${path}`, {
+      ...options,
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        "Content-Type": "application/json",
+        "x-bridge-token": WA_BRIDGE_TOKEN,
+        ...(options.headers ?? {}),
+      },
+    });
+  } catch (err) {
+    // Distinguir "no contesta / DNS / timeout" de un error HTTP normal,
+    // para que quede claro en los logs si el bridge es inalcanzable.
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`No se pudo contactar el bridge (${WA_BRIDGE_URL}${path}): ${reason}`);
+  }
   return res;
 }
 

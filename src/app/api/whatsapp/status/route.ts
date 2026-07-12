@@ -33,8 +33,13 @@ export async function GET() {
     );
 
     return jsonNoStore(bridgeStatus);
-  } catch {
-    // Bridge inaccesible: usar Supabase como fuente de verdad
+  } catch (err) {
+    // Bridge inaccesible: usar Supabase como fuente de verdad, pero dejar
+    // rastro del motivo real (timeout, 401 por token distinto, DNS, etc.)
+    // para poder diagnosticar sin adivinar.
+    const reason = err instanceof Error ? err.message : String(err);
+    console.error("[whatsapp/status] no se pudo contactar el bridge:", reason);
+
     const { data: session } = await supabase
       .from("wa_sessions")
       .select("status, phone, qr_code")
@@ -49,9 +54,10 @@ export async function GET() {
         status: fallbackStatus,
         phone: null,
         qr: session.qr_code ?? null,
+        bridge_error: reason,
       });
     }
 
-    return jsonNoStore({ status: "disconnected", qr: null, phone: null });
+    return jsonNoStore({ status: "disconnected", qr: null, phone: null, bridge_error: reason });
   }
 }
