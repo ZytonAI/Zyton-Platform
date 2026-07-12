@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { clientSchema } from "@/lib/validations/client.schema";
+import { clientUpdateSchema } from "@/lib/validations/client.schema";
+import { syncBillingInvoice } from "@/lib/client-billing";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -36,12 +37,12 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const parsed = clientSchema.partial().safeParse(body);
+  const parsed = clientUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const existing = await supabase.from("clients").select("status").eq("id", id).single();
+  const existing = await supabase.from("clients").select("status, billing_invoice_id").eq("id", id).single();
 
   const { data, error } = await supabase
     .from("clients")
@@ -60,6 +61,24 @@ export async function PATCH(
       description: `Estado cambiado de "${existing.data?.status}" a "${parsed.data.status}"`,
       metadata: { from: existing.data?.status, to: parsed.data.status },
     });
+  }
+
+  // Sincronizar la factura de cobro con el tipo/monto de cobro del cliente.
+  // Si se desconfigura el cobro (billing_type: null) se desvincula pero la
+  // factura ya generada no se borra — sigue visible/editable en Facturas.
+  if ("billing_type" in parsed.data) {
+    if (parsed.data.billing_type) {
+      const invoiceId = await syncBillingInvoice(
+        supabase, user.id, id, data.name, data.contract_start, parsed.data, existing.data?.billing_invoice_id
+      );
+      if (invoiceId && invoiceId !== existing.data?.billing_invoice_id) {
+        await supabase.from("clients").update({ billing_invoice_id: invoiceId }).eq("id", id);
+        data.billing_invoice_id = invoiceId;
+      }
+    } else if (existing.data?.billing_invoice_id) {
+      await supabase.from("clients").update({ billing_invoice_id: null }).eq("id", id);
+      data.billing_invoice_id = null;
+    }
   }
 
   return NextResponse.json(data);

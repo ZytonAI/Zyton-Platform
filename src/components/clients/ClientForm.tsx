@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { clientSchema, type ClientFormData } from "@/lib/validations/client.schema";
+import { clientSchema, BILLING_TYPES, type ClientFormData } from "@/lib/validations/client.schema";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,8 @@ export function ClientForm({ open, onClose, onSave, initialData }: Props) {
       contract_start: initialData?.contract_start ?? "",
       contract_end: initialData?.contract_end ?? "",
       notes: initialData?.notes ?? "",
+      billing_type: initialData?.billing_type ?? null,
+      billing_amount: initialData?.billing_amount ?? null,
     },
   });
 
@@ -58,12 +60,15 @@ export function ClientForm({ open, onClose, onSave, initialData }: Props) {
       contract_start: initialData?.contract_start ?? "",
       contract_end: initialData?.contract_end ?? "",
       notes: initialData?.notes ?? "",
+      billing_type: initialData?.billing_type ?? null,
+      billing_amount: initialData?.billing_amount ?? null,
     });
     setDuplicate(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData]);
 
   const status = watch("status");
+  const billingType = watch("billing_type");
 
   async function submit(data: ClientFormData, force: boolean) {
     const url = isEdit ? `/api/clients/${initialData.id}` : "/api/clients";
@@ -142,6 +147,51 @@ export function ClientForm({ open, onClose, onSave, initialData }: Props) {
               <Label>Fin contrato</Label>
               <Input {...register("contract_end")} type="date" />
             </div>
+
+            {/* Cobro al cliente — genera automáticamente su factura de tipo "cobro" */}
+            <div className="col-span-2 rounded-lg border p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Cobro al cliente</p>
+                <p className="text-xs text-muted-foreground">
+                  Al configurarlo se crea (o actualiza) su factura de cobro automáticamente
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Tipo de cobro</Label>
+                  <Select
+                    value={billingType ?? "none"}
+                    onValueChange={(v) =>
+                      setValue("billing_type", v === "none" ? null : (v as ClientFormData["billing_type"]))
+                    }
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin cobro configurado</SelectItem>
+                      {BILLING_TYPES.map((b) => (
+                        <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {billingType && (
+                  <div className="space-y-1">
+                    <Label>Monto {billingType === "monthly" ? "mensual" : ""} *</Label>
+                    <Input
+                      {...register("billing_amount", { valueAsNumber: true })}
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                    />
+                    {errors.billing_amount && (
+                      <p className="text-xs text-destructive">{errors.billing_amount.message}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="col-span-2 space-y-1">
               <Label>Notas</Label>
               <Textarea {...register("notes")} placeholder="Notas sobre el cliente..." rows={3} />

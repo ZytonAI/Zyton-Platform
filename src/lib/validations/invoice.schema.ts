@@ -19,6 +19,8 @@ const invoiceObjectSchema = z.object({
   category:             z.string().optional().or(z.literal("")),
   due_date:             z.string().min(1, "La fecha de pago es requerida"),
   status:               z.enum(["pending", "paid", "overdue"]),
+  // payable = pago que hace la empresa (gasto); receivable = cobro a un cliente (ingreso)
+  type:                 z.enum(["payable", "receivable"]),
   is_recurring:         z.boolean(),
   recurrence_interval:  z.enum(["weekly","biweekly","monthly","bimonthly","quarterly","semiannual","annual"]).nullable().optional(),
   client_id:            z.string().uuid().nullable().optional(),

@@ -5,9 +5,10 @@
 
 import {
   UserX, UserCheck, CalendarClock, ThumbsUp, ThumbsDown, ShoppingCart,
+  ArrowUpCircle, ArrowDownCircle,
 } from "lucide-react";
 import type {
-  LeadStatus, ClientStatus, InvoiceStatus, CalendarEventStatus,
+  LeadStatus, ClientStatus, InvoiceStatus, InvoiceType, CalendarEventStatus,
 } from "@/types";
 
 export interface StatusConfig {
@@ -81,6 +82,20 @@ export const INVOICE_STATUS: Record<InvoiceStatus, StatusConfig> = {
   overdue: {
     label: "Vencida",
     badgeClass: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+  },
+};
+
+// payable = pago que hace la empresa (gasto); receivable = cobro a un cliente (ingreso)
+export const INVOICE_TYPE: Record<InvoiceType, StatusConfig> = {
+  payable: {
+    label: "Pago",
+    badgeClass: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
+    icon: ArrowUpCircle,
+  },
+  receivable: {
+    label: "Cobro",
+    badgeClass: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+    icon: ArrowDownCircle,
   },
 };
 

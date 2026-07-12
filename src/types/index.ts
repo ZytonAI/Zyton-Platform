@@ -19,6 +19,8 @@ export interface Lead {
   updated_at: string;
 }
 
+export type ClientBillingType = "monthly" | "one_time";
+
 export interface Client {
   id: string;
   owner_id: string;
@@ -31,6 +33,11 @@ export interface Client {
   contract_start: string | null;
   contract_end: string | null;
   notes: string | null;
+  /** Cómo se le cobra a este cliente — null si no tiene cobro configurado */
+  billing_type: ClientBillingType | null;
+  billing_amount: number | null;
+  /** Factura de cobro generada/sincronizada automáticamente a partir de billing_type/billing_amount */
+  billing_invoice_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -135,6 +142,8 @@ export interface WebAnalysis {
 }
 
 export type InvoiceStatus = "pending" | "paid" | "overdue";
+/** payable = pago que hace la empresa (gasto); receivable = cobro a un cliente (ingreso) */
+export type InvoiceType = "payable" | "receivable";
 export type RecurrenceInterval = "weekly" | "biweekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
 export type CalendarEventType = "event" | "task" | "deadline";
 export type CalendarEventStatus = "pending" | "done";
@@ -147,6 +156,7 @@ export interface Invoice {
   category: string | null;
   due_date: string;
   status: InvoiceStatus;
+  type: InvoiceType;
   is_recurring: boolean;
   recurrence_interval: RecurrenceInterval | null;
   /** Cliente al que pertenece la factura (opcional — gastos generales sin cliente) */

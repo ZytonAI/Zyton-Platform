@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { clientSchema } from "@/lib/validations/client.schema";
 import { findDuplicate } from "@/lib/duplicates";
+import { syncBillingInvoice } from "@/lib/client-billing";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -51,6 +52,17 @@ export async function POST(request: Request) {
     event_type: "created",
     description: "Cliente creado",
   });
+
+  // Si se configuró un cobro, generar automáticamente su factura de cobro
+  if (parsed.data.billing_type) {
+    const invoiceId = await syncBillingInvoice(
+      supabase, user.id, data.id, data.name, parsed.data.contract_start, parsed.data, null
+    );
+    if (invoiceId) {
+      await supabase.from("clients").update({ billing_invoice_id: invoiceId }).eq("id", data.id);
+      data.billing_invoice_id = invoiceId;
+    }
+  }
 
   return NextResponse.json(data, { status: 201 });
 }

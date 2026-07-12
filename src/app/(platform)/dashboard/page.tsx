@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Users, Briefcase, TrendingUp, MessageCircle, Receipt, CalendarDays,
-  Plus, AlertTriangle,
+  Plus, AlertTriangle, DollarSign,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -49,18 +49,18 @@ function buildWeekBuckets(now: number, recentLeads: { created_at: string }[]) {
   return buckets;
 }
 
-/** Cubetas mensuales (últimos 6): pagado vs pendiente */
-function buildMonthBuckets(invoices: { amount: number; status: string; due_date: string }[]) {
+/** Cubetas mensuales (últimos 6): ingresos cobrados (receivable) vs gastos pagados (payable) */
+function buildMonthBuckets(invoices: { amount: number; status: string; due_date: string; type: string }[]) {
   const buckets: { label: string; value: number; secondary: number }[] = [];
   for (let m = 5; m >= 0; m--) {
     const d = new Date();
     d.setMonth(d.getMonth() - m);
     const key = d.toISOString().slice(0, 7);
-    const monthInvoices = invoices.filter((i) => i.due_date.startsWith(key));
+    const monthInvoices = invoices.filter((i) => i.due_date.startsWith(key) && i.status === "paid");
     buckets.push({
       label: d.toLocaleDateString("es-ES", { month: "short" }),
-      value: monthInvoices.filter((i) => i.status === "paid").reduce((a, i) => a + Number(i.amount), 0),
-      secondary: monthInvoices.filter((i) => i.status !== "paid").reduce((a, i) => a + Number(i.amount), 0),
+      value: monthInvoices.filter((i) => i.type === "receivable").reduce((a, i) => a + Number(i.amount), 0),
+      secondary: monthInvoices.filter((i) => i.type === "payable").reduce((a, i) => a + Number(i.amount), 0),
     });
   }
   return buckets;
@@ -68,10 +68,11 @@ function buildMonthBuckets(invoices: { amount: number; status: string; due_date:
 
 /** Mini gráfico de barras sin dependencias (server-rendered) */
 function MiniBars({
-  data, accentClass = "bg-primary",
+  data, accentClass = "bg-primary", secondaryClass = "bg-muted-foreground/25",
 }: {
   data: { label: string; value: number; secondary?: number }[];
   accentClass?: string;
+  secondaryClass?: string;
 }) {
   const max = Math.max(1, ...data.map((d) => Math.max(d.value, d.secondary ?? 0)));
   return (
@@ -86,7 +87,7 @@ function MiniBars({
             />
             {d.secondary !== undefined && (
               <div
-                className="w-full max-w-6 rounded-t-md bg-muted-foreground/25"
+                className={`w-full max-w-6 rounded-t-md ${secondaryClass} transition-all`}
                 style={{ height: `${Math.max(3, (d.secondary / max) * 100)}%` }}
                 title={`${d.label}: ${d.secondary}`}
               />
@@ -134,7 +135,7 @@ export default async function DashboardPage() {
       .eq("status", "converted"),
     supabase
       .from("invoices")
-      .select("id, title, amount, due_date, status")
+      .select("id, title, amount, due_date, status, type")
       .eq("owner_id", user!.id)
       .in("status", ["pending", "overdue"])
       .order("due_date", { ascending: true })
@@ -155,7 +156,7 @@ export default async function DashboardPage() {
       .limit(2000),
     supabase
       .from("invoices")
-      .select("amount, status, due_date")
+      .select("amount, status, due_date, type")
       .eq("owner_id", user!.id)
       .gte("due_date", sixMonthsAgoStr)
       .limit(2000),
@@ -192,8 +193,13 @@ export default async function DashboardPage() {
   const weekBuckets = buildWeekBuckets(now, recentLeadsRes.data ?? []);
   const leadsThisWeek = weekBuckets[weekBuckets.length - 1]?.value ?? 0;
 
-  // ── Facturas por mes: pagado vs pendiente (últimos 6) ──
+  // ── Ingresos vs gastos por mes (últimos 6) ──
   const monthBuckets = buildMonthBuckets(invoicesHistoryRes.data ?? []);
+  const incomeThisMonth = monthBuckets[monthBuckets.length - 1]?.value ?? 0;
+  const thisMonthKey = new Date().toISOString().slice(0, 7);
+  const incomePendingThisMonth = (invoicesHistoryRes.data ?? [])
+    .filter((i) => i.type === "receivable" && i.status !== "paid" && i.due_date.startsWith(thisMonthKey))
+    .reduce((a, i) => a + Number(i.amount), 0);
 
   const stats = [
     {
@@ -227,6 +233,14 @@ export default async function DashboardPage() {
       icon: MessageCircle,
       color: "text-amber-600 dark:text-amber-400",
       bg: "bg-amber-50 dark:bg-amber-500/15",
+    },
+    {
+      title: "Ingresos del mes",
+      value: formatAmount(incomeThisMonth),
+      description: incomePendingThisMonth > 0 ? `${formatAmount(incomePendingThisMonth)} por cobrar` : "Todo cobrado",
+      icon: DollarSign,
+      color: "text-sky-600 dark:text-sky-400",
+      bg: "bg-sky-50 dark:bg-sky-500/15",
     },
   ];
 
@@ -281,7 +295,7 @@ export default async function DashboardPage() {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
           {stats.map((stat) => (
             <Card key={stat.title} className="border-0 shadow-sm">
               <CardHeader className="pb-2">
@@ -324,19 +338,19 @@ export default async function DashboardPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Facturas por mes — pagado vs pendiente
+                  Ingresos vs gastos por mes
                 </CardTitle>
-                <Receipt className="w-4 h-4 text-emerald-500" />
+                <DollarSign className="w-4 h-4 text-sky-500" />
               </div>
             </CardHeader>
             <CardContent>
-              <MiniBars data={monthBuckets} accentClass="bg-emerald-500" />
+              <MiniBars data={monthBuckets} accentClass="bg-sky-500" secondaryClass="bg-orange-400/70" />
               <div className="flex items-center gap-4 mt-2">
                 <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Pagado
+                  <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Ingresos (cobrado)
                 </span>
                 <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-muted-foreground/25 inline-block" /> Pendiente
+                  <span className="w-2.5 h-2.5 rounded-sm bg-orange-400/70 inline-block" /> Gastos (pagado)
                 </span>
               </div>
             </CardContent>
@@ -359,8 +373,17 @@ export default async function DashboardPage() {
               ) : (
                 upcomingInvoices.map((inv) => (
                   <div key={inv.id} className="flex items-center justify-between text-sm">
-                    <span className="truncate font-medium max-w-[45%]">{inv.title}</span>
+                    <span className="truncate font-medium max-w-[40%]">{inv.title}</span>
                     <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          inv.type === "receivable"
+                            ? "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"
+                            : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
+                        }`}
+                      >
+                        {inv.type === "receivable" ? "Cobro" : "Pago"}
+                      </span>
                       <span className="font-mono text-xs tabular-nums">{formatAmount(Number(inv.amount))}</span>
                       <span className="text-muted-foreground text-xs">
                         {new Date(inv.due_date + "T00:00:00").toLocaleDateString("es-ES", {

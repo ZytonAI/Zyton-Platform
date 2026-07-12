@@ -35,6 +35,16 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+function formatAmount(n: number) {
+  return `$${n.toLocaleString("es-CO", { maximumFractionDigits: 2 })}`;
+}
+
+function billingLabel(client: Client) {
+  if (!client.billing_type || client.billing_amount == null) return "Sin cobro configurado";
+  const amount = formatAmount(client.billing_amount);
+  return client.billing_type === "monthly" ? `${amount} / mes` : `${amount} — pago único`;
+}
+
 export function ClientDetailClient({ client: initialClient, history: initialHistory, attachments: initialAttachments, invoices = [] }: Props) {
   const router = useRouter();
   const [client, setClient] = useState(initialClient);
@@ -85,6 +95,7 @@ export function ClientDetailClient({ client: initialClient, history: initialHist
               <Field label="Empresa" value={client.company} />
               <Field label="Inicio contrato" value={formatDate(client.contract_start)} />
               <Field label="Fin contrato" value={formatDate(client.contract_end)} />
+              <Field label="Cobro" value={billingLabel(client)} />
               {client.notes && (
                 <div className="col-span-2">
                   <p className="text-xs text-muted-foreground">Notas</p>
@@ -111,8 +122,9 @@ export function ClientDetailClient({ client: initialClient, history: initialHist
                 <div className="space-y-2">
                   {invoices.map((inv) => (
                     <div key={inv.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50 last:border-0">
-                      <span className="truncate font-medium max-w-[45%]">{inv.title}</span>
+                      <span className="truncate font-medium max-w-[35%]">{inv.title}</span>
                       <div className="flex items-center gap-3 shrink-0">
+                        <StatusBadge status={inv.type} type="invoiceType" />
                         <span className="font-mono text-xs tabular-nums">
                           ${Number(inv.amount).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
                         </span>
@@ -122,9 +134,9 @@ export function ClientDetailClient({ client: initialClient, history: initialHist
                     </div>
                   ))}
                   <div className="flex items-center justify-between pt-2 text-sm font-semibold">
-                    <span>Total facturado</span>
-                    <span className="font-mono tabular-nums">
-                      ${invoices.reduce((a, i) => a + Number(i.amount), 0).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
+                    <span>Cobrado a este cliente</span>
+                    <span className="font-mono tabular-nums text-sky-600 dark:text-sky-400">
+                      ${invoices.filter((i) => i.type === "receivable").reduce((a, i) => a + Number(i.amount), 0).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>

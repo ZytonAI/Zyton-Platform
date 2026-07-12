@@ -9,7 +9,7 @@ import { ClientForm } from "./ClientForm";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   Plus, MoreHorizontal, Pencil, Trash2, Eye, Search,
-  Phone, Mail, Building2, UserCheck, UserMinus, UserX, CalendarClock,
+  Phone, Mail, Building2, UserCheck, UserMinus, UserX, CalendarClock, DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CLIENT_STATUS } from "@/lib/status-config";
@@ -38,6 +38,10 @@ const FILTERS: { label: string; value: string }[] = [
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function formatBillingAmount(n: number) {
+  return `$${n.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`;
 }
 
 /** Días hasta el fin del contrato; negativo si ya venció */
@@ -315,6 +319,12 @@ export function ClientsClient({ initialClients }: Props) {
                   {contractBadge && (
                     <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 tracking-tight ring-1", contractBadge.className)}>
                       <CalendarClock className="w-2.5 h-2.5" /> {contractBadge.label}
+                    </span>
+                  )}
+                  {client.billing_type && client.billing_amount != null && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 tracking-tight ring-1 bg-sky-100 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/20">
+                      <DollarSign className="w-2.5 h-2.5" />
+                      {formatBillingAmount(client.billing_amount)}{client.billing_type === "monthly" ? "/mes" : ""}
                     </span>
                   )}
                   <span className="ml-auto text-[10px] text-muted-foreground/70 font-semibold">

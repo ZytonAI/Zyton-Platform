@@ -52,6 +52,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }
       category:            initialData?.category ?? "",
       due_date:            initialData?.due_date ?? "",
       status:              initialData?.status ?? "pending",
+      type:                initialData?.type ?? "payable",
       is_recurring:        initialData?.is_recurring ?? false,
       recurrence_interval: initialData?.recurrence_interval ?? null,
       client_id:           initialData?.client_id ?? null,
@@ -70,6 +71,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }
       category:            initialData?.category ?? "",
       due_date:            initialData?.due_date ?? "",
       status:              initialData?.status ?? "pending",
+      type:                initialData?.type ?? "payable",
       is_recurring:        initialData?.is_recurring ?? false,
       recurrence_interval: initialData?.recurrence_interval ?? null,
       client_id:           initialData?.client_id ?? null,
@@ -79,6 +81,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }
   }, [open, initialData]);
 
   const status = watch("status");
+  const type = watch("type");
   const isRecurring = watch("is_recurring");
   const recurrenceInterval = watch("recurrence_interval");
   const clientId = watch("client_id");
@@ -123,6 +126,34 @@ export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 space-y-1">
+              <Label>Tipo *</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setValue("type", "payable")}
+                  className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    type === "payable"
+                      ? "border-orange-400 bg-orange-50 text-orange-700 dark:border-orange-500/50 dark:bg-orange-500/15 dark:text-orange-300"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  Pago <span className="text-xs font-normal opacity-70">(gasto)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setValue("type", "receivable")}
+                  className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    type === "receivable"
+                      ? "border-sky-400 bg-sky-50 text-sky-700 dark:border-sky-500/50 dark:bg-sky-500/15 dark:text-sky-300"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  Cobro <span className="text-xs font-normal opacity-70">(ingreso de cliente)</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="col-span-2 space-y-1">
               <Label>Título *</Label>
               <Input {...register("title")} placeholder="Ej: Renta oficina, Hosting web..." />
               {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
@@ -146,7 +177,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }
             </div>
 
             <div className="space-y-1">
-              <Label>Fecha de pago *</Label>
+              <Label>Fecha de {type === "receivable" ? "cobro" : "pago"} *</Label>
               <Input {...register("due_date")} type="date" />
               {errors.due_date && <p className="text-xs text-destructive">{errors.due_date.message}</p>}
             </div>
@@ -162,7 +193,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">Pendiente</SelectItem>
-                  <SelectItem value="paid">Pagada</SelectItem>
+                  <SelectItem value="paid">{type === "receivable" ? "Cobrada" : "Pagada"}</SelectItem>
                   <SelectItem value="overdue">Vencida</SelectItem>
                 </SelectContent>
               </Select>
@@ -170,7 +201,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }
 
             {clients.length > 0 && (
               <div className="col-span-2 space-y-1">
-                <Label>Cliente <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                <Label>Cliente <span className="text-muted-foreground font-normal">{type === "receivable" ? "" : "(opcional)"}</span></Label>
                 <Select
                   value={clientId ?? "none"}
                   onValueChange={(v) => setValue("client_id", v === "none" ? null : v)}
@@ -192,7 +223,7 @@ export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }
             <div className="col-span-2 rounded-lg border p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium">Pago recurrente</p>
+                  <p className="text-sm font-medium">{type === "receivable" ? "Cobro" : "Pago"} recurrente</p>
                   <p className="text-xs text-muted-foreground">Se repite automáticamente</p>
                 </div>
                 <Switch

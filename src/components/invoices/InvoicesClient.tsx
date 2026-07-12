@@ -22,7 +22,7 @@ import { InvoiceForm } from "./InvoiceForm";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   Plus, MoreHorizontal, Pencil, Trash2, Search, RefreshCw,
-  Clock, AlertTriangle, CheckCircle2,
+  Clock, AlertTriangle, CheckCircle2, ArrowDownCircle,
 } from "lucide-react";
 import { RECURRENCE_INTERVALS } from "@/lib/validations/invoice.schema";
 import { toast } from "sonner";
@@ -36,9 +36,11 @@ interface Props {
 
 const FILTERS: { label: string; value: string }[] = [
   { label: "Todas", value: "all" },
+  { label: "Por cobrar", value: "receivable" },
+  { label: "Por pagar", value: "payable" },
   { label: "Pendientes", value: "pending" },
   { label: "Vencidas", value: "overdue" },
-  { label: "Pagadas", value: "paid" },
+  { label: "Pagadas/Cobradas", value: "paid" },
   { label: "Recurrentes", value: "recurring" },
 ];
 
@@ -86,12 +88,14 @@ export function InvoicesClient({ initialInvoices, clients = [] }: Props) {
     );
     const sum = (list: Invoice[]) => list.reduce((acc, i) => acc + Number(i.amount), 0);
     return {
-      pendingCount: pending.length,
-      pendingSum: sum(pending),
+      receivablePendingCount: pending.filter((i) => i.type === "receivable").length,
+      receivablePendingSum: sum(pending.filter((i) => i.type === "receivable")),
+      payablePendingCount: pending.filter((i) => i.type === "payable").length,
+      payablePendingSum: sum(pending.filter((i) => i.type === "payable")),
       overdueCount: overdue.length,
       overdueSum: sum(overdue),
-      paidCount: paidThisMonth.length,
-      paidSum: sum(paidThisMonth),
+      collectedCount: paidThisMonth.filter((i) => i.type === "receivable").length,
+      collectedSum: sum(paidThisMonth.filter((i) => i.type === "receivable")),
     };
   }, [invoices]);
 
@@ -104,6 +108,8 @@ export function InvoicesClient({ initialInvoices, clients = [] }: Props) {
       filter === "recurring" ? i.is_recurring :
       filter === "overdue" ? isOverdue(i) :
       filter === "pending" ? i.status === "pending" && !isOverdue(i) :
+      filter === "payable" ? i.type === "payable" :
+      filter === "receivable" ? i.type === "receivable" :
       i.status === filter;
     return matchSearch && matchFilter;
   });
@@ -155,23 +161,33 @@ export function InvoicesClient({ initialInvoices, clients = [] }: Props) {
     <div className="p-5 space-y-5">
 
       {/* ── KPIs ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="rounded-2xl p-4 bg-card shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-lg bg-sky-50 dark:bg-sky-500/15 flex items-center justify-center">
+              <ArrowDownCircle className="w-4 h-4 text-sky-500" />
+            </div>
+            <p className="text-[11px] font-medium text-muted-foreground">Por cobrar (pendiente)</p>
+          </div>
+          <p className="text-2xl font-bold leading-none text-sky-600 dark:text-sky-400">{formatAmount(kpis.receivablePendingSum)}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{kpis.receivablePendingCount} factura{kpis.receivablePendingCount !== 1 ? "s" : ""}</p>
+        </div>
         <div className="rounded-2xl p-4 bg-card shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-500/15 flex items-center justify-center">
               <Clock className="w-4 h-4 text-amber-500" />
             </div>
-            <p className="text-[11px] font-medium text-muted-foreground">Pendiente por pagar</p>
+            <p className="text-[11px] font-medium text-muted-foreground">Por pagar (pendiente)</p>
           </div>
-          <p className="text-2xl font-bold leading-none">{formatAmount(kpis.pendingSum)}</p>
-          <p className="text-[11px] text-muted-foreground mt-1">{kpis.pendingCount} factura{kpis.pendingCount !== 1 ? "s" : ""}</p>
+          <p className="text-2xl font-bold leading-none">{formatAmount(kpis.payablePendingSum)}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{kpis.payablePendingCount} factura{kpis.payablePendingCount !== 1 ? "s" : ""}</p>
         </div>
         <div className="rounded-2xl p-4 bg-card shadow-sm ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-7 h-7 rounded-lg bg-red-50 dark:bg-red-500/15 flex items-center justify-center">
               <AlertTriangle className="w-4 h-4 text-red-500" />
             </div>
-            <p className="text-[11px] font-medium text-muted-foreground">Vencidas sin pagar</p>
+            <p className="text-[11px] font-medium text-muted-foreground">Vencidas sin resolver</p>
           </div>
           <p className="text-2xl font-bold leading-none text-red-600 dark:text-red-400">{formatAmount(kpis.overdueSum)}</p>
           <p className="text-[11px] text-muted-foreground mt-1">{kpis.overdueCount} factura{kpis.overdueCount !== 1 ? "s" : ""}</p>
@@ -181,10 +197,10 @@ export function InvoicesClient({ initialInvoices, clients = [] }: Props) {
             <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-500/15 flex items-center justify-center">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             </div>
-            <p className="text-[11px] font-medium text-muted-foreground">Pagadas este mes</p>
+            <p className="text-[11px] font-medium text-muted-foreground">Cobrado este mes</p>
           </div>
-          <p className="text-2xl font-bold leading-none text-emerald-600 dark:text-emerald-400">{formatAmount(kpis.paidSum)}</p>
-          <p className="text-[11px] text-muted-foreground mt-1">{kpis.paidCount} factura{kpis.paidCount !== 1 ? "s" : ""}</p>
+          <p className="text-2xl font-bold leading-none text-emerald-600 dark:text-emerald-400">{formatAmount(kpis.collectedSum)}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">{kpis.collectedCount} factura{kpis.collectedCount !== 1 ? "s" : ""}</p>
         </div>
       </div>
 
@@ -236,11 +252,12 @@ export function InvoicesClient({ initialInvoices, clients = [] }: Props) {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
+              <TableHead>Tipo</TableHead>
               <TableHead>Título</TableHead>
               <TableHead className="text-right">Monto</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Categoría</TableHead>
-              <TableHead>Fecha de pago</TableHead>
+              <TableHead>Fecha</TableHead>
               <TableHead>Recurrencia</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="w-10" />
@@ -250,7 +267,7 @@ export function InvoicesClient({ initialInvoices, clients = [] }: Props) {
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center text-muted-foreground py-12"
                 >
                   {search
@@ -267,9 +284,17 @@ export function InvoicesClient({ initialInvoices, clients = [] }: Props) {
                     isOverdue(invoice) && "bg-red-50/60 dark:bg-red-500/[0.07] hover:bg-red-50 dark:hover:bg-red-500/10"
                   )}
                 >
+                  <TableCell>
+                    <StatusBadge status={invoice.type} type="invoiceType" />
+                  </TableCell>
                   <TableCell className="font-medium">{invoice.title}</TableCell>
-                  <TableCell className="font-mono text-sm text-right tabular-nums">
-                    {formatAmount(invoice.amount)}
+                  <TableCell
+                    className={cn(
+                      "font-mono text-sm text-right tabular-nums font-semibold",
+                      invoice.type === "receivable" ? "text-sky-600 dark:text-sky-400" : "text-orange-600 dark:text-orange-400"
+                    )}
+                  >
+                    {invoice.type === "receivable" ? "+" : "-"}{formatAmount(invoice.amount)}
                   </TableCell>
                   <TableCell>
                     {invoice.client_id && clientNames[invoice.client_id] ? (
@@ -308,7 +333,7 @@ export function InvoicesClient({ initialInvoices, clients = [] }: Props) {
                         {invoice.status !== "paid" && (
                           <DropdownMenuItem onClick={() => handleMarkStatus(invoice, "paid")}>
                             <CheckCircle2 className="w-4 h-4 mr-2" />
-                            Marcar como pagada
+                            Marcar como {invoice.type === "receivable" ? "cobrada" : "pagada"}
                           </DropdownMenuItem>
                         )}
                         {invoice.status === "paid" && (
