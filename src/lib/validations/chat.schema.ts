@@ -32,7 +32,9 @@ const webhookMessageSchema = z.object({
   // Media entrante en base64 (cap ~3 MB crudo → ~4 MB en base64, límite de body de Vercel)
   media_base64: z.string().max(4_500_000, "Media demasiado grande").optional(),
   media_mime: z.string().optional(),
-  media_filename: z.string().optional(),
+  // Fotos y stickers casi nunca traen nombre de archivo — el bridge manda
+  // null explícito en ese caso (a diferencia de documentos, que sí lo traen).
+  media_filename: z.string().nullable().optional(),
   // Número conectado de la sesión (solo dígitos) — para resolver el owner correcto
   session_phone: z.string().optional(),
 });

@@ -12,7 +12,7 @@ function mediaLabel(mime: string | undefined): string {
   return "[Documento]";
 }
 
-function extFromMime(mime: string | undefined, fileName: string | undefined): string {
+function extFromMime(mime: string | undefined, fileName: string | null | undefined): string {
   const fromName = fileName?.match(/\.([a-zA-Z0-9]{1,8})$/)?.[1];
   if (fromName) return fromName.toLowerCase();
   const map: Record<string, string> = {
