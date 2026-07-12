@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { HistoryTimeline } from "@/components/shared/HistoryTimeline";
+import { AddNote } from "@/components/shared/AddNote";
 import { FileAttachments } from "@/components/shared/FileAttachments";
 import { LeadForm } from "./LeadForm";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
@@ -129,7 +130,12 @@ export function LeadDetailClient({ lead: initialLead, history: initialHistory, a
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Historial</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <AddNote
+              entityType="lead"
+              entityId={lead.id}
+              onAdded={(event) => setHistory((prev) => [event, ...prev])}
+            />
             <HistoryTimeline events={history} />
           </CardContent>
         </Card>

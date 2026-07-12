@@ -3,6 +3,7 @@
 import { Menu } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useSidebar } from "./SidebarContext";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface TopBarProps {
   title: string;
@@ -14,20 +15,21 @@ export function TopBar({ title, userEmail }: TopBarProps) {
   const { toggle } = useSidebar();
 
   return (
-    <header className="h-16 bg-white/80 backdrop-blur-sm border-b border-gray-200/70 flex items-center justify-between px-4 sm:px-7 shrink-0 shadow-[0_1px_8px_rgba(0,0,0,0.06)]">
+    <header className="h-16 bg-card/80 backdrop-blur-sm border-b flex items-center justify-between px-4 sm:px-7 shrink-0 shadow-[0_1px_8px_rgba(0,0,0,0.06)]">
       <div className="flex items-center gap-3">
         <button
           onClick={toggle}
-          className="md:hidden p-1.5 -ml-1 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+          className="md:hidden p-1.5 -ml-1 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
           aria-label="Abrir menú"
         >
           <Menu className="w-5 h-5" />
         </button>
-        <h1 className="text-[15px] font-semibold text-gray-900 tracking-tight">{title}</h1>
+        <h1 className="text-[15px] font-semibold text-foreground tracking-tight">{title}</h1>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <ThemeToggle />
         {userEmail && (
-          <span className="text-xs text-gray-400 hidden sm:block font-medium tracking-tight">
+          <span className="text-xs text-muted-foreground hidden sm:block font-medium tracking-tight">
             {userEmail}
           </span>
         )}

@@ -7,6 +7,9 @@ export const leadSchema = z.object({
   company: z.string().optional().or(z.literal("")),
   status: z.enum(["new", "contacted", "scheduled", "qualified", "lost", "converted"]),
   source: z.string().optional().or(z.literal("")),
+  priority: z.enum(["alta", "media", "baja"]).nullable().optional(),
+  website: z.string().optional().or(z.literal("")),
+  maps_url: z.string().optional().or(z.literal("")),
   notes: z.string().optional().or(z.literal("")),
 });
 

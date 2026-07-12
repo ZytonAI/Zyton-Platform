@@ -9,14 +9,16 @@ import { HistoryTimeline } from "@/components/shared/HistoryTimeline";
 import { FileAttachments } from "@/components/shared/FileAttachments";
 import { ClientForm } from "./ClientForm";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { AddNote } from "@/components/shared/AddNote";
+import { ArrowLeft, Pencil, Trash2, Receipt } from "lucide-react";
 import { toast } from "sonner";
-import type { Client, HistoryEvent, FileAttachment } from "@/types";
+import type { Client, HistoryEvent, FileAttachment, Invoice } from "@/types";
 
 interface Props {
   client: Client;
   history: HistoryEvent[];
   attachments: FileAttachment[];
+  invoices?: Invoice[];
 }
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
@@ -33,7 +35,7 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function ClientDetailClient({ client: initialClient, history: initialHistory, attachments: initialAttachments }: Props) {
+export function ClientDetailClient({ client: initialClient, history: initialHistory, attachments: initialAttachments, invoices = [] }: Props) {
   const router = useRouter();
   const [client, setClient] = useState(initialClient);
   const [history, setHistory] = useState(initialHistory);
@@ -92,6 +94,44 @@ export function ClientDetailClient({ client: initialClient, history: initialHist
             </CardContent>
           </Card>
 
+          {/* Facturas del cliente */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Facturas</CardTitle>
+                <Receipt className="w-4 h-4 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {invoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Este cliente no tiene facturas asociadas. Asígnale una desde la sección Facturas.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {invoices.map((inv) => (
+                    <div key={inv.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50 last:border-0">
+                      <span className="truncate font-medium max-w-[45%]">{inv.title}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="font-mono text-xs tabular-nums">
+                          ${Number(inv.amount).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
+                        </span>
+                        <span className="text-muted-foreground text-xs">{formatDate(inv.due_date)}</span>
+                        <StatusBadge status={inv.status} type="invoice" />
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between pt-2 text-sm font-semibold">
+                    <span>Total facturado</span>
+                    <span className="font-mono tabular-nums">
+                      ${invoices.reduce((a, i) => a + Number(i.amount), 0).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Archivos adjuntos</CardTitle>
@@ -112,7 +152,12 @@ export function ClientDetailClient({ client: initialClient, history: initialHist
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Historial</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <AddNote
+              entityType="client"
+              entityId={client.id}
+              onAdded={(event) => setHistory((prev) => [event, ...prev])}
+            />
             <HistoryTimeline events={history} />
           </CardContent>
         </Card>

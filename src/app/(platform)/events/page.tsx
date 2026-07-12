@@ -10,7 +10,8 @@ export default async function EventsPage() {
     supabase
       .from("calendar_events")
       .select("*")
-      .order("event_date", { ascending: true }),
+      .order("event_date", { ascending: true })
+      .limit(1000),
   ]);
 
   return (

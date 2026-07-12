@@ -1,5 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+
+const createPageSchema = z.object({
+  title: z.string().max(500).optional(),
+  content: z.unknown().optional(),
+  parent_id: z.string().uuid().nullable().optional(),
+  icon: z.string().max(16).optional(),
+});
 
 export async function GET() {
   const supabase = await createClient();
@@ -22,8 +30,11 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await request.json();
-  const { title = "Sin título", content = { type: "doc", content: [{ type: "paragraph" }] }, parent_id = null, icon = "📄" } = body;
+  const parsed = createPageSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
+  }
+  const { title = "Sin título", content = { type: "doc", content: [{ type: "paragraph" }] }, parent_id = null, icon = "📄" } = parsed.data;
 
   const { data, error } = await supabase
     .from("workspace_pages")

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { leadSchema, type LeadFormData } from "@/lib/validations/lead.schema";
@@ -9,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import type { Lead } from "@/types";
 
 interface Props {
@@ -18,8 +21,15 @@ interface Props {
   initialData?: Lead;
 }
 
+interface DuplicateInfo {
+  type: string;
+  id: string;
+  name: string;
+}
+
 export function LeadForm({ open, onClose, onSave, initialData }: Props) {
   const isEdit = !!initialData;
+  const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors, isSubmitting } } = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema),
@@ -30,32 +40,57 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
       company: initialData?.company ?? "",
       status: initialData?.status ?? "new",
       source: initialData?.source ?? "",
+      priority: initialData?.priority ?? null,
+      website: initialData?.website ?? "",
+      maps_url: initialData?.maps_url ?? "",
       notes: initialData?.notes ?? "",
     },
   });
 
   const status = watch("status");
+  const priority = watch("priority");
 
-  async function onSubmit(data: LeadFormData) {
+  async function submit(data: LeadFormData, force: boolean) {
     const url = isEdit ? `/api/leads/${initialData.id}` : "/api/leads";
     const method = isEdit ? "PATCH" : "POST";
 
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(force ? { ...data, force: true } : data),
     });
 
     if (res.ok) {
       const saved = await res.json();
       onSave(saved);
+      setDuplicate(null);
       reset();
       onClose();
+      return;
     }
+
+    if (res.status === 409) {
+      const err = await res.json().catch(() => ({}));
+      setDuplicate(err.duplicate_of ?? { type: "lead", id: "", name: "otro registro" });
+      return;
+    }
+
+    const err = await res.json().catch(() => ({}));
+    toast.error(typeof err.error === "string" ? err.error : "Error guardando el lead");
+  }
+
+  async function onSubmit(data: LeadFormData) {
+    await submit(data, false);
+  }
+
+  function handleClose() {
+    setDuplicate(null);
+    reset();
+    onClose();
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose(); } }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar lead" : "Nuevo lead"}</DialogTitle>
@@ -84,6 +119,27 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
               <Label>Fuente</Label>
               <Input {...register("source")} placeholder="Instagram, referido..." />
             </div>
+            <div className="space-y-1">
+              <Label>Sitio web</Label>
+              <Input {...register("website")} placeholder="https://..." />
+            </div>
+            <div className="space-y-1">
+              <Label>Prioridad</Label>
+              <Select
+                value={priority ?? "none"}
+                onValueChange={(v) => setValue("priority", v === "none" ? null : (v as "alta" | "media" | "baja"))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin prioridad" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin prioridad</SelectItem>
+                  <SelectItem value="alta">🔥 Alta</SelectItem>
+                  <SelectItem value="media">Media</SelectItem>
+                  <SelectItem value="baja">Baja</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="col-span-2 space-y-1">
               <Label>Estado</Label>
               <Select value={status} onValueChange={(v) => setValue("status", v as LeadFormData["status"])}>
@@ -105,8 +161,42 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
               <Textarea {...register("notes")} placeholder="Notas sobre el lead..." rows={3} />
             </div>
           </div>
+
+          {duplicate && (
+            <div className="rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                Ya existe {duplicate.type === "client" ? "un cliente" : "un lead"} con este teléfono o email:{" "}
+                <span className="font-semibold">{duplicate.name}</span>
+              </div>
+              <div className="flex gap-2">
+                {duplicate.id && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      window.open(`/${duplicate.type === "client" ? "clients" : "leads"}/${duplicate.id}`, "_blank");
+                    }}
+                  >
+                    Ver registro
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isSubmitting}
+                  onClick={handleSubmit((data) => submit(data, true))}
+                >
+                  Crear de todos modos
+                </Button>
+              </div>
+            </div>
+          )}
+
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => { reset(); onClose(); }}>Cancelar</Button>
+            <Button type="button" variant="outline" onClick={handleClose}>Cancelar</Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear lead"}
             </Button>

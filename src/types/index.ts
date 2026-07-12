@@ -82,6 +82,8 @@ export interface Message {
   media_type: string | null;
   status: MessageStatus;
   created_at: string;
+  /** URL firmada (1 h) generada por la API al listar mensajes con media */
+  media_signed_url?: string;
 }
 
 export interface WaSession {
@@ -147,9 +149,15 @@ export interface Invoice {
   status: InvoiceStatus;
   is_recurring: boolean;
   recurrence_interval: RecurrenceInterval | null;
+  /** Cliente al que pertenece la factura (opcional — gastos generales sin cliente) */
+  client_id: string | null;
+  /** Factura recurrente que generó esta (cadena de recurrencia) */
+  recurrence_parent_id: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** Join opcional (.select("*, clients(name)")) */
+  clients?: { name: string } | null;
 }
 
 export interface CalendarEvent {

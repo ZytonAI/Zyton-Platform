@@ -5,18 +5,27 @@ import type { Invoice } from "@/types";
 
 export default async function InvoicesPage() {
   const supabase = await createClient();
-  const [{ data: { user } }, { data: invoices }] = await Promise.all([
+  const [{ data: { user } }, { data: invoices }, { data: clients }] = await Promise.all([
     supabase.auth.getUser(),
     supabase
       .from("invoices")
       .select("*")
-      .order("due_date", { ascending: true }),
+      .order("due_date", { ascending: true })
+      .limit(1000),
+    supabase
+      .from("clients")
+      .select("id, name")
+      .order("name", { ascending: true })
+      .limit(1000),
   ]);
 
   return (
     <>
       <TopBar title="Facturas" userEmail={user?.email} />
-      <InvoicesClient initialInvoices={(invoices as Invoice[]) ?? []} />
+      <InvoicesClient
+        initialInvoices={(invoices as Invoice[]) ?? []}
+        clients={clients ?? []}
+      />
     </>
   );
 }
