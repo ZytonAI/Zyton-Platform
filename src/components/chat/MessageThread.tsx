@@ -592,10 +592,10 @@ export function MessageThread({ conversation, onBack }: Props) {
                         title={over16mb ? "Archivo demasiado grande para WhatsApp (máx. 16 MB)" : undefined}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${attIsVideo ? "bg-purple-50" : "bg-red-50"}`}>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${attIsVideo ? "bg-purple-50 dark:bg-purple-500/15" : "bg-red-50 dark:bg-red-500/15"}`}>
                           {attIsVideo
-                            ? <Video className="w-4 h-4 text-purple-500" />
-                            : <FileText className="w-4 h-4 text-red-500" />
+                            ? <Video className="w-4 h-4 text-purple-500 dark:text-purple-400" />
+                            : <FileText className="w-4 h-4 text-red-500 dark:text-red-400" />
                           }
                         </div>
                         <div className="flex-1 min-w-0">

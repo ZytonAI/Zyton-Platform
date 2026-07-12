@@ -74,11 +74,11 @@ export function WaConnectPanel({ onConnected, suppressConnect = false }: Props) 
   if (data.status === "connecting" && data.qr) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-6">
-        <div className="w-14 h-14 rounded-2xl bg-green-50 flex items-center justify-center">
-          <Wifi className="w-7 h-7 text-green-600" />
+        <div className="w-14 h-14 rounded-2xl bg-green-50 dark:bg-green-500/15 flex items-center justify-center">
+          <Wifi className="w-7 h-7 text-green-600 dark:text-green-400" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Escanea el QR con WhatsApp</h2>
+          <h2 className="text-xl font-semibold text-foreground">Escanea el QR con WhatsApp</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Abre WhatsApp en tu teléfono → Dispositivos vinculados → Vincular dispositivo
           </p>
@@ -106,11 +106,11 @@ export function WaConnectPanel({ onConnected, suppressConnect = false }: Props) 
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-6">
-      <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center">
-        <WifiOff className="w-7 h-7 text-red-500" />
+      <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-500/15 flex items-center justify-center">
+        <WifiOff className="w-7 h-7 text-red-500 dark:text-red-400" />
       </div>
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">WhatsApp desconectado</h2>
+        <h2 className="text-xl font-semibold text-foreground">WhatsApp desconectado</h2>
         <p className="text-sm text-muted-foreground mt-1">
           El servicio no responde. Intenta conectar o verifica que el servicio en tu VPS esté corriendo.
         </p>

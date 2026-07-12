@@ -102,7 +102,7 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
   }
 
   return (
-    <div className="flex flex-col h-full border-r bg-white">
+    <div className="flex flex-col h-full border-r bg-card">
       <div className="p-3 border-b flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -131,8 +131,8 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
             <div
               key={conv.id}
               className={cn(
-                "group relative flex items-center gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors",
-                selectedId === conv.id && "bg-blue-50 hover:bg-blue-50"
+                "group relative flex items-center gap-3 px-4 py-3 border-b border-border hover:bg-muted transition-colors",
+                selectedId === conv.id && "bg-primary/10 hover:bg-primary/10"
               )}
             >
               <button
@@ -144,7 +144,7 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
-                    <span className="font-medium text-sm text-gray-900 truncate">
+                    <span className="font-medium text-sm text-foreground truncate">
                       {conv.contact_name ?? conv.contact_phone}
                     </span>
                     <span className="text-xs text-muted-foreground shrink-0 group-hover:hidden">
@@ -163,7 +163,7 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setDeletingId(conv.id); }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 w-7 h-7 flex items-center justify-center rounded-md hover:bg-red-50 hover:text-red-500 text-muted-foreground"
+                className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 w-7 h-7 flex items-center justify-center rounded-md hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                 title="Eliminar chat"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -202,8 +202,8 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
           </DialogHeader>
           <div className="flex flex-col gap-3 py-2">
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">
-                Teléfono <span className="text-red-500">*</span>
+              <label className="text-sm font-medium text-foreground mb-1 block">
+                Teléfono <span className="text-destructive">*</span>
               </label>
               <Input
                 placeholder="Ej: 5491112345678"
@@ -216,7 +216,7 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
               </p>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Nombre (opcional)</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">Nombre (opcional)</label>
               <Input
                 placeholder="Ej: Juan García"
                 value={name}
@@ -224,7 +224,7 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
             </div>
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
