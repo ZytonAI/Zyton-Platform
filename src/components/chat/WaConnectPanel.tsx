@@ -24,7 +24,7 @@ export function WaConnectPanel({ onConnected, suppressConnect = false }: Props) 
 
   const poll = useCallback(async () => {
     try {
-      const res = await fetch("/api/whatsapp/status");
+      const res = await fetch("/api/whatsapp/status", { cache: "no-store" });
       if (res.ok) {
         const json: StatusResponse = await res.json();
         setData(json);
@@ -84,7 +84,7 @@ export function WaConnectPanel({ onConnected, suppressConnect = false }: Props) 
           </p>
         </div>
         <div className="p-3 border rounded-2xl bg-white shadow-sm">
-          <Image src={data.qr} alt="QR WhatsApp" width={220} height={220} unoptimized />
+          <Image key={data.qr} src={data.qr} alt="QR WhatsApp" width={220} height={220} unoptimized />
         </div>
         <p className="text-xs text-muted-foreground">El QR se actualiza cada 20 segundos</p>
       </div>

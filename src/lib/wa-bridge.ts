@@ -4,6 +4,7 @@ const WA_BRIDGE_TOKEN = process.env.WA_BRIDGE_TOKEN!;
 async function bridgeFetch(path: string, options: RequestInit = {}) {
   const res = await fetch(`${WA_BRIDGE_URL}${path}`, {
     ...options,
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       "x-bridge-token": WA_BRIDGE_TOKEN,
