@@ -10,7 +10,10 @@ export const RECURRENCE_INTERVALS = [
   { value: "annual",     label: "Anual" },
 ] as const;
 
-export const invoiceSchema = z.object({
+// Objeto base sin refine — necesario porque zod v4 no permite .partial()
+// sobre un schema que ya tiene .refine() aplicado (lanza en runtime, no en
+// tipos: "no me deja actualizar una factura" era este error silencioso).
+const invoiceObjectSchema = z.object({
   title:                z.string().min(1, "El título es requerido"),
   amount:               z.number().positive("El monto debe ser mayor a 0"),
   category:             z.string().optional().or(z.literal("")),
@@ -20,10 +23,22 @@ export const invoiceSchema = z.object({
   recurrence_interval:  z.enum(["weekly","biweekly","monthly","bimonthly","quarterly","semiannual","annual"]).nullable().optional(),
   client_id:            z.string().uuid().nullable().optional(),
   notes:                z.string().optional().or(z.literal("")),
-}).refine(
-  (d: { is_recurring: boolean; recurrence_interval?: string | null }) =>
-    !d.is_recurring || !!d.recurrence_interval,
-  { message: "Selecciona la frecuencia de repetición", path: ["recurrence_interval"] }
-);
+});
+
+const requiresIntervalWhenRecurring = (d: { is_recurring?: boolean; recurrence_interval?: string | null }) =>
+  !d.is_recurring || !!d.recurrence_interval;
+
+const recurringRefineOptions = {
+  message: "Selecciona la frecuencia de repetición",
+  path: ["recurrence_interval"],
+};
+
+// Creación (POST): todos los campos requeridos según el objeto base.
+export const invoiceSchema = invoiceObjectSchema.refine(requiresIntervalWhenRecurring, recurringRefineOptions);
+
+// Actualización (PATCH): campos opcionales. El refine se aplica DESPUÉS de
+// .partial() (sobre el ZodObject, no sobre el ZodEffects) para que ambas
+// operaciones sean válidas en runtime.
+export const invoiceUpdateSchema = invoiceObjectSchema.partial().refine(requiresIntervalWhenRecurring, recurringRefineOptions);
 
 export type InvoiceFormData = z.infer<typeof invoiceSchema>;

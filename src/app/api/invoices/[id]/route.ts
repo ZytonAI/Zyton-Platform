@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { invoiceSchema } from "@/lib/validations/invoice.schema";
+import { invoiceUpdateSchema } from "@/lib/validations/invoice.schema";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -31,7 +31,7 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const parsed = invoiceSchema.partial().safeParse(body);
+  const parsed = invoiceUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }

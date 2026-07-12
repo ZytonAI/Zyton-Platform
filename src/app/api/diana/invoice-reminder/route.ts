@@ -31,48 +31,38 @@ function addInterval(dateStr: string, interval: string): string {
 
 type ServiceClient = ReturnType<typeof createServiceClient>;
 
-// Genera la siguiente factura de cada recurrente vencida que aún no tiene
-// sucesora. El índice único parcial sobre recurrence_parent_id garantiza
-// idempotencia aunque el cron corra dos veces.
-async function generateRecurringInvoices(supabase: ServiceClient, todayStr: string): Promise<number> {
+// Facturas recurrentes ya pagadas cuyo período se cumplió (due_date <= hoy):
+// se reinicia LA MISMA factura a "pendiente" con la fecha de pago avanzada
+// al siguiente período (mensual, quincenal, etc.) — es un pago que se repite
+// cada mes, no una factura nueva cada vez. Si sigue sin pagar, se queda
+// "overdue" recordando la deuda hasta que la marquen pagada; recién ahí, en
+// la siguiente corrida del cron, se recicla al período que sigue.
+async function resetRecurringInvoices(supabase: ServiceClient, todayStr: string): Promise<number> {
   const { data: recurring } = await supabase
     .from("invoices")
-    .select("id, owner_id, title, amount, category, due_date, is_recurring, recurrence_interval, client_id, notes")
+    .select("id, due_date, recurrence_interval")
     .eq("is_recurring", true)
+    .eq("status", "paid")
+    .not("recurrence_interval", "is", null)
     .lte("due_date", todayStr)
     .limit(500);
 
   if (!recurring?.length) return 0;
 
-  // Excluir las que ya tienen sucesora
-  const ids = recurring.map((i) => i.id);
-  const { data: children } = await supabase
-    .from("invoices")
-    .select("recurrence_parent_id")
-    .in("recurrence_parent_id", ids);
-  const withChild = new Set((children ?? []).map((c) => c.recurrence_parent_id));
-
-  let generated = 0;
+  let updated = 0;
   for (const inv of recurring) {
-    if (withChild.has(inv.id) || !inv.recurrence_interval) continue;
-
-    const { error } = await supabase.from("invoices").insert({
-      owner_id: inv.owner_id,
-      title: inv.title,
-      amount: inv.amount,
-      category: inv.category,
-      due_date: addInterval(inv.due_date, inv.recurrence_interval),
-      status: "pending",
-      is_recurring: true,
-      recurrence_interval: inv.recurrence_interval,
-      recurrence_parent_id: inv.id,
-      client_id: inv.client_id ?? null,
-      notes: inv.notes,
-    });
-    // 23505 = unique_violation (otra ejecución ya creó la sucesora) — ignorar
-    if (!error) generated++;
+    const { error } = await supabase
+      .from("invoices")
+      .update({
+        due_date: addInterval(inv.due_date, inv.recurrence_interval!),
+        status: "pending",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", inv.id)
+      .eq("status", "paid"); // seguridad: solo si sigue "paid" al momento del update
+    if (!error) updated++;
   }
-  return generated;
+  return updated;
 }
 
 export async function GET(request: Request) {
@@ -90,12 +80,12 @@ export async function GET(request: Request) {
   today.setHours(23, 59, 59, 999);
   const todayStr = today.toISOString().split("T")[0];
 
-  // 1. Generar sucesoras de facturas recurrentes vencidas (idempotente)
-  let generated = 0;
+  // 1. Reciclar facturas recurrentes ya pagadas cuyo período se cumplió
+  let recurringReset = 0;
   try {
-    generated = await generateRecurringInvoices(supabase, todayStr);
+    recurringReset = await resetRecurringInvoices(supabase, todayStr);
   } catch {
-    // No romper los recordatorios si la generación falla
+    // No romper los recordatorios si el reciclaje falla
   }
 
   // 2. Persistir pending → overdue para las vencidas (antes solo se calculaba en UI)
@@ -106,7 +96,7 @@ export async function GET(request: Request) {
     .lt("due_date", todayStr);
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) return NextResponse.json({ ok: true, generated, skipped: "no telegram token" });
+  if (!token) return NextResponse.json({ ok: true, recurringReset, skipped: "no telegram token" });
 
   const { data: invoices } = await supabase
     .from("invoices")
@@ -115,7 +105,7 @@ export async function GET(request: Request) {
     .neq("status", "paid")
     .order("due_date", { ascending: true });
 
-  if (!invoices?.length) return NextResponse.json({ ok: true, generated, reminded: 0 });
+  if (!invoices?.length) return NextResponse.json({ ok: true, recurringReset, reminded: 0 });
 
   // Agrupar por owner_id
   const byOwner = new Map<string, typeof invoices>();
@@ -172,5 +162,5 @@ export async function GET(request: Request) {
     reminded++;
   }
 
-  return NextResponse.json({ ok: true, generated, reminded });
+  return NextResponse.json({ ok: true, recurringReset, reminded });
 }
