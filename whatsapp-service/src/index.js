@@ -156,6 +156,9 @@ async function forwardIncomingMessage(msg) {
 }
 
 // ── POST al webhook con reintentos (el webhook es idempotente) ──
+// Los errores 4xx (payload inválido, media muy grande, etc.) no se
+// reintentan porque reintentar no los va a arreglar, pero SIEMPRE se
+// registran — antes se descartaban en silencio y no quedaba rastro.
 async function postWebhook(payload, attempt = 1) {
   if (!WEBHOOK_URL) return;
   try {
@@ -167,8 +170,14 @@ async function postWebhook(payload, attempt = 1) {
       },
       body: JSON.stringify(payload),
     });
-    if (!res.ok && res.status >= 500 && attempt < 3) {
-      throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      if (res.status >= 500 && attempt < 3) {
+        throw new Error(`HTTP ${res.status}: ${bodyText.slice(0, 300)}`);
+      }
+      console.error(
+        `Webhook rechazó el mensaje (wa_message_id=${payload.wa_message_id}): HTTP ${res.status} — ${bodyText.slice(0, 300)}`
+      );
     }
   } catch (err) {
     if (attempt < 3) {
