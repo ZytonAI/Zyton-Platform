@@ -197,7 +197,13 @@ async function htmlToPdf(htmlBase64) {
 const app = express();
 app.use(express.json({ limit: "25mb" }));
 
-// Auth: todas las rutas exigen el token compartido
+// Healthcheck público (sin token) — para que EasyPanel/Docker/balanceadores
+// puedan verificar que el proceso está vivo sin necesitar el secreto.
+// No expone estado de la sesión de WhatsApp, solo que el servidor responde.
+app.get("/health", (_req, res) => res.status(200).json({ ok: true }));
+app.get("/", (_req, res) => res.status(200).json({ ok: true, service: "zyton-wa-bridge" }));
+
+// Auth: el resto de rutas exige el token compartido
 app.use((req, res, next) => {
   if (req.headers["x-bridge-token"] !== BRIDGE_TOKEN) {
     return res.status(401).json({ error: "Unauthorized" });
