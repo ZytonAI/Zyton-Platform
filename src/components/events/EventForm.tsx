@@ -83,6 +83,20 @@ export function EventForm({ open, onClose, onSave, initialData, defaultDate }: P
     },
   });
 
+  // El diálogo se queda montado entre aperturas — hay que re-sincronizar
+  // los datos del evento cada vez que se abre (editar uno distinto, o crear).
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      title:       initialData?.title ?? "",
+      event_date:  "placeholder",
+      type:        initialData?.type ?? "event",
+      description: initialData?.description ?? "",
+      status:      initialData?.status ?? "pending",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialData]);
+
   const type = watch("type");
   const status = watch("status");
 

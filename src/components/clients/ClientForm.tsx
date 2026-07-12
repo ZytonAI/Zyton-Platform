@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { clientSchema, type ClientFormData } from "@/lib/validations/client.schema";
@@ -44,6 +44,24 @@ export function ClientForm({ open, onClose, onSave, initialData }: Props) {
       notes: initialData?.notes ?? "",
     },
   });
+
+  // El diálogo se queda montado entre aperturas — hay que re-sincronizar
+  // los datos del cliente cada vez que se abre (editar uno distinto, o crear).
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      name: initialData?.name ?? "",
+      email: initialData?.email ?? "",
+      phone: initialData?.phone ?? "",
+      company: initialData?.company ?? "",
+      status: initialData?.status ?? "active",
+      contract_start: initialData?.contract_start ?? "",
+      contract_end: initialData?.contract_end ?? "",
+      notes: initialData?.notes ?? "",
+    });
+    setDuplicate(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialData]);
 
   const status = watch("status");
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { leadSchema, type LeadFormData } from "@/lib/validations/lead.schema";
@@ -46,6 +46,26 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
       notes: initialData?.notes ?? "",
     },
   });
+
+  // El diálogo se queda montado entre aperturas — hay que re-sincronizar
+  // los datos del lead cada vez que se abre (editar uno distinto, o crear).
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      name: initialData?.name ?? "",
+      email: initialData?.email ?? "",
+      phone: initialData?.phone ?? "",
+      company: initialData?.company ?? "",
+      status: initialData?.status ?? "new",
+      source: initialData?.source ?? "",
+      priority: initialData?.priority ?? null,
+      website: initialData?.website ?? "",
+      maps_url: initialData?.maps_url ?? "",
+      notes: initialData?.notes ?? "",
+    });
+    setDuplicate(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialData]);
 
   const status = watch("status");
   const priority = watch("priority");

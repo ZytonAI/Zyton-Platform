@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { invoiceSchema, type InvoiceFormData, RECURRENCE_INTERVALS } from "@/lib/validations/invoice.schema";
@@ -57,6 +58,25 @@ export function InvoiceForm({ open, onClose, onSave, initialData, clients = [] }
       notes:               initialData?.notes ?? "",
     },
   });
+
+  // El diálogo se queda montado entre aperturas — defaultValues solo se lee
+  // una vez al montar, así que hay que re-sincronizar los datos de la
+  // factura cada vez que se abre (editar una distinta, o crear una nueva).
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      title:               initialData?.title ?? "",
+      amount:              initialData?.amount ?? 0,
+      category:            initialData?.category ?? "",
+      due_date:            initialData?.due_date ?? "",
+      status:              initialData?.status ?? "pending",
+      is_recurring:        initialData?.is_recurring ?? false,
+      recurrence_interval: initialData?.recurrence_interval ?? null,
+      client_id:           initialData?.client_id ?? null,
+      notes:               initialData?.notes ?? "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialData]);
 
   const status = watch("status");
   const isRecurring = watch("is_recurring");
