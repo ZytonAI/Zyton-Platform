@@ -25,7 +25,9 @@ const webhookMessageSchema = z.object({
   // body es opcional cuando el mensaje trae media (imagen/audio/video/documento)
   body: z.string().optional(),
   contact_phone: z.string().optional(),
-  contact_name: z.string().optional(),
+  // Contactos con identificador @lid (privacidad activada / cuentas de negocio)
+  // no siempre traen nombre visible — el bridge manda null explícito en ese caso.
+  contact_name: z.string().nullable().optional(),
   timestamp: z.string().optional(),
   // Media entrante en base64 (cap ~3 MB crudo → ~4 MB en base64, límite de body de Vercel)
   media_base64: z.string().max(4_500_000, "Media demasiado grande").optional(),
