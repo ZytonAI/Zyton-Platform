@@ -115,8 +115,12 @@ export function MessageThread({ conversation, onBack }: Props) {
     if (res.ok) {
       const fresh: Message[] = await res.json();
       setMessages((prev) => {
-        // Refrescar también cuando cambian estados (ticks) aunque no cambie la cantidad
-        const signature = (list: Message[]) => list.map((m) => `${m.id}:${m.status}`).join(",");
+        // Refrescar también cuando cambian estados (ticks), o cuando un mensaje
+        // llegó por Realtime sin su URL firmada todavía (Realtime trae la fila
+        // cruda de la base de datos, sin media_signed_url — eso solo lo agrega
+        // este endpoint) y hay que completarla.
+        const signature = (list: Message[]) =>
+          list.map((m) => `${m.id}:${m.status}:${m.media_url ? !!m.media_signed_url : 1}`).join(",");
         if (signature(fresh) === signature(prev)) return prev;
         return fresh;
       });
