@@ -9,13 +9,19 @@ interface Props {
   type: "lead" | "client" | "invoice" | "invoiceType" | "event";
 }
 
+const FALLBACK_CONFIG = {
+  label: "—",
+  badgeClass: "bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-300",
+};
+
 export function StatusBadge({ status, type }: Props) {
-  const config =
+  const config = (
     type === "lead"        ? LEAD_STATUS[status as LeadStatus] :
     type === "client"      ? CLIENT_STATUS[status as ClientStatus] :
     type === "invoice"     ? INVOICE_STATUS[status as InvoiceStatus] :
     type === "invoiceType" ? INVOICE_TYPE[status as InvoiceType] :
-                             EVENT_STATUS[status as CalendarEventStatus];
+                             EVENT_STATUS[status as CalendarEventStatus]
+  ) ?? FALLBACK_CONFIG;
 
   return (
     <Badge className={`text-xs font-medium border-0 ${config.badgeClass}`}>

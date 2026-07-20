@@ -19,6 +19,13 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
   if (clientRes.error) notFound();
 
+  // Si la migración 016 aún no se aplicó, `type` no existe en la fila —
+  // se normaliza a "payable" para no romper el render.
+  const normalizedInvoices = ((invoicesRes.data ?? []) as Invoice[]).map((inv) => ({
+    ...inv,
+    type: inv.type ?? "payable",
+  }));
+
   return (
     <>
       <TopBar title={clientRes.data.name} userEmail={user.email} />
@@ -26,7 +33,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         client={clientRes.data as Client}
         history={(historyRes.data ?? []) as HistoryEvent[]}
         attachments={(attachmentsRes.data ?? []) as FileAttachment[]}
-        invoices={(invoicesRes.data ?? []) as Invoice[]}
+        invoices={normalizedInvoices}
       />
     </>
   );

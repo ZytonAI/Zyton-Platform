@@ -28,11 +28,18 @@ export default async function InvoicesPage() {
       .limit(1000),
   ]);
 
+  // Si la migración 016 aún no se aplicó, `type` no existe en la fila —
+  // se normaliza a "payable" (comportamiento previo) para no romper el render.
+  const normalizedInvoices = ((invoices as Invoice[]) ?? []).map((inv) => ({
+    ...inv,
+    type: inv.type ?? "payable",
+  }));
+
   return (
     <>
       <TopBar title="Facturas" userEmail={user?.email} />
       <InvoicesClient
-        initialInvoices={(invoices as Invoice[]) ?? []}
+        initialInvoices={normalizedInvoices}
         clients={clients ?? []}
       />
     </>
