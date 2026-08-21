@@ -4,6 +4,7 @@ import { Menu } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useSidebar } from "./SidebarContext";
 import { ThemeToggle } from "./ThemeToggle";
+import { memberByEmail } from "@/lib/team";
 
 interface TopBarProps {
   title: string;
@@ -11,7 +12,11 @@ interface TopBarProps {
 }
 
 export function TopBar({ title, userEmail }: TopBarProps) {
-  const initials = userEmail ? userEmail[0].toUpperCase() : "U";
+  // Se entra con usuario, no con correo: mostrar el usuario del equipo
+  // (SamuelZY, CamiloZY, …) y caer al email solo si no está en la lista.
+  const member = memberByEmail(userEmail);
+  const label = member?.username ?? userEmail;
+  const initials = (member?.name ?? userEmail ?? "U")[0].toUpperCase();
   const { toggle } = useSidebar();
 
   return (
@@ -28,13 +33,13 @@ export function TopBar({ title, userEmail }: TopBarProps) {
       </div>
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        {userEmail && (
+        {label && (
           <span className="text-xs text-muted-foreground hidden sm:block font-medium tracking-tight">
-            {userEmail}
+            {label}
           </span>
         )}
         <Avatar className="w-8 h-8 ring-2 ring-primary/20">
-          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-700 text-white text-xs font-bold">
+          <AvatarFallback className={`bg-gradient-to-br ${member?.avatar ?? "from-blue-500 to-blue-700"} text-white text-xs font-bold`}>
             {initials}
           </AvatarFallback>
         </Avatar>
