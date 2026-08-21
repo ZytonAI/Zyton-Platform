@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Genera .next/standalone — necesario para la imagen Docker de EasyPanel
+  output: "standalone",
 };
 
 export default nextConfig;

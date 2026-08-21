@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.github
+.vercel
+.claude
+whatsapp-service
+supabase
+*.md
+!README.md
+.env*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+npm-debug.log*
