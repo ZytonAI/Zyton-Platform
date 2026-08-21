@@ -130,7 +130,6 @@ export async function POST(request: Request) {
         const { data: leads, error: leadsErr } = await supabase
           .from("leads")
           .select("id, name, website, phone, notes")
-          .eq("owner_id", user.id)
           .eq("source", "raul")
           .eq("analyzed", false)
           .not("website", "is", null)

@@ -12,7 +12,7 @@ export default async function InvoicesPage() {
     // Reciclar facturas recurrentes pagadas cuyo período ya se cumplió —
     // se ve reflejado al instante, sin esperar al cron diario.
     const todayStr = new Date().toISOString().split("T")[0];
-    await resetRecurringInvoices(supabase, todayStr, user.id).catch(() => {});
+    await resetRecurringInvoices(supabase, todayStr).catch(() => {});
   }
 
   const [{ data: invoices }, { data: clients }] = await Promise.all([

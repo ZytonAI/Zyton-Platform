@@ -20,7 +20,6 @@ export async function POST(request: Request) {
     .from("conversations")
     .select("wa_chat_id")
     .eq("id", conversation_id)
-    .eq("owner_id", user.id)
     .single();
 
   if (convErr || !conv) {
@@ -32,7 +31,6 @@ export async function POST(request: Request) {
     .from("file_attachments")
     .select("storage_path, file_name, content_type, content")
     .eq("id", attachment_id)
-    .eq("owner_id", user.id)
     .single();
 
   if (attachErr || !attachment) {

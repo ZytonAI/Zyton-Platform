@@ -238,7 +238,6 @@ export async function runTool(
         let query = supabase
           .from("leads")
           .select("id,name,phone,email,company,status,priority,source,website,analyzed,created_at")
-          .eq("owner_id", ownerId)
           .order("created_at", { ascending: false })
           .limit(Math.min(Number(args.limit ?? 20), 50));
 
@@ -259,16 +258,13 @@ export async function runTool(
         const [leadsRes, clientsRes, messagesRes] = await Promise.all([
           supabase
             .from("leads")
-            .select("status")
-            .eq("owner_id", ownerId),
+            .select("status"),
           supabase
             .from("clients")
-            .select("status")
-            .eq("owner_id", ownerId),
+            .select("status"),
           supabase
             .from("messages")
-            .select("id", { count: "exact", head: true })
-            .eq("owner_id", ownerId),
+            .select("id", { count: "exact", head: true }),
         ]);
 
         const leads = leadsRes.data ?? [];
@@ -299,7 +295,6 @@ export async function runTool(
           supabase
             .from("calendar_events")
             .select("id,title,event_date,type,description,status")
-            .eq("owner_id", ownerId)
             .gte("event_date", now.toISOString())
             .order("event_date", { ascending: true })
             .limit(limit);
@@ -328,7 +323,6 @@ export async function runTool(
         let query = supabase
           .from("clients")
           .select("id,name,email,phone,company,status,contract_start,contract_end")
-          .eq("owner_id", ownerId)
           .order("created_at", { ascending: false });
 
         if (args.status) query = query.eq("status", args.status as string);
@@ -342,7 +336,6 @@ export async function runTool(
         let query = supabase
           .from("invoices")
           .select("id,title,amount,category,due_date,status,is_recurring")
-          .eq("owner_id", ownerId)
           .order("due_date", { ascending: true });
 
         if (args.status) query = query.eq("status", args.status as string);
@@ -386,8 +379,7 @@ export async function runTool(
           const { error: leadErr } = await supabase
             .from("leads")
             .update({ status: "scheduled" })
-            .eq("id", args.lead_id as string)
-            .eq("owner_id", ownerId);
+            .eq("id", args.lead_id as string);
           if (leadErr) return `✅ Evento creado pero ❌ FALLÓ actualizar el lead: ${leadErr.message}`;
         }
 
@@ -412,14 +404,12 @@ export async function runTool(
         const { data: oldLeads } = await supabase
           .from("leads")
           .select("id,name,status")
-          .in("id", ids)
-          .eq("owner_id", ownerId);
+          .in("id", ids);
 
         const { error, count } = await supabase
           .from("leads")
           .update({ status: args.status })
-          .in("id", ids)
-          .eq("owner_id", ownerId);
+          .in("id", ids);
 
         if (error) return `❌ FALLÓ cambiar estado de leads: ${error.message}`;
 
@@ -507,7 +497,6 @@ export async function runTool(
           .from("calendar_events")
           .select("*")
           .eq("id", eventId)
-          .eq("owner_id", ownerId)
           .single();
 
         if (!eventData) return "No encontré ese evento o no tienes permiso para borrarlo.";
@@ -516,16 +505,14 @@ export async function runTool(
         const { error } = await supabase
           .from("calendar_events")
           .update({ deleted_at: new Date().toISOString() })
-          .eq("id", eventId)
-          .eq("owner_id", ownerId);
+          .eq("id", eventId);
 
         if (error) {
           if (error.message.includes("deleted_at")) {
             const { error: hardErr } = await supabase
               .from("calendar_events")
               .delete()
-              .eq("id", eventId)
-              .eq("owner_id", ownerId);
+              .eq("id", eventId);
             if (hardErr) return `❌ FALLÓ eliminar evento: ${hardErr.message}`;
           } else {
             return `❌ FALLÓ eliminar evento: ${error.message}`;
@@ -563,8 +550,7 @@ export async function runTool(
           const { error } = await supabase
             .from("calendar_events")
             .update({ deleted_at: null })
-            .eq("id", lastAction.entity_id)
-            .eq("owner_id", ownerId);
+            .eq("id", lastAction.entity_id);
           if (error) return `❌ FALLÓ restaurar evento: ${error.message}`;
           revertMsg = `✅ Restauré el evento "${lastAction.old_data?.title}".`;
 
@@ -572,8 +558,7 @@ export async function runTool(
           const { error } = await supabase
             .from("calendar_events")
             .update({ deleted_at: new Date().toISOString() })
-            .eq("id", lastAction.entity_id)
-            .eq("owner_id", ownerId);
+            .eq("id", lastAction.entity_id);
           if (error) return `❌ FALLÓ deshacer creación: ${error.message}`;
           revertMsg = `✅ Eliminé el evento "${lastAction.new_data?.title}" que acababa de crear.`;
 
@@ -584,8 +569,7 @@ export async function runTool(
             const { error } = await supabase
               .from("leads")
               .update({ status: lead.status })
-              .eq("id", lead.id)
-              .eq("owner_id", ownerId);
+              .eq("id", lead.id);
             if (error) failCount++;
           }
           if (failCount > 0) return `❌ FALLÓ revertir ${failCount} de ${oldLeads.length} leads.`;

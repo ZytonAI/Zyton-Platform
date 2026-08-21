@@ -117,33 +117,27 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("owner_id", user!.id),
+      .select("id", { count: "exact", head: true }),
     supabase
       .from("clients")
       .select("id", { count: "exact", head: true })
-      .eq("owner_id", user!.id)
       .eq("status", "active"),
     supabase
       .from("messages")
-      .select("id", { count: "exact", head: true })
-      .eq("owner_id", user!.id),
+      .select("id", { count: "exact", head: true }),
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
-      .eq("owner_id", user!.id)
       .eq("status", "converted"),
     supabase
       .from("invoices")
       .select("id, title, amount, due_date, status, type")
-      .eq("owner_id", user!.id)
       .in("status", ["pending", "overdue"])
       .order("due_date", { ascending: true })
       .limit(3),
     supabase
       .from("calendar_events")
       .select("id, title, event_date, type, status")
-      .eq("owner_id", user!.id)
       .eq("status", "pending")
       .gte("event_date", startOfTodayIso)
       .order("event_date", { ascending: true })
@@ -151,19 +145,16 @@ export default async function DashboardPage() {
     supabase
       .from("leads")
       .select("created_at")
-      .eq("owner_id", user!.id)
       .gte("created_at", eightWeeksAgo)
       .limit(2000),
     supabase
       .from("invoices")
       .select("amount, status, due_date, type")
-      .eq("owner_id", user!.id)
       .gte("due_date", sixMonthsAgoStr)
       .limit(2000),
     supabase
       .from("clients")
       .select("id, name, contract_end")
-      .eq("owner_id", user!.id)
       .eq("status", "active")
       .not("contract_end", "is", null)
       .gte("contract_end", todayStr)
@@ -173,7 +164,6 @@ export default async function DashboardPage() {
     supabase
       .from("invoices")
       .select("id", { count: "exact", head: true })
-      .eq("owner_id", user!.id)
       .neq("status", "paid")
       .lt("due_date", todayStr),
   ]);

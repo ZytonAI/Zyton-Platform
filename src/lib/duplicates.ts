@@ -27,12 +27,10 @@ export async function findDuplicate(
     supabase
       .from("leads")
       .select("id, name, phone, email")
-      .eq("owner_id", ownerId)
       .limit(2000),
     supabase
       .from("clients")
       .select("id, name, phone, email")
-      .eq("owner_id", ownerId)
       .limit(2000),
   ]);
 

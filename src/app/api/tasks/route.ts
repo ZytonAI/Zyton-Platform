@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { calendarEventSchema } from "@/lib/validations/calendar-event.schema";
+import { taskSchema } from "@/lib/validations/task.schema";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -8,13 +8,13 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data, error } = await supabase
-    .from("calendar_events")
+    .from("tasks")
     .select("*")
-    .order("event_date", { ascending: true })
-    .limit(1000);
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  return NextResponse.json(data ?? []);
 }
 
 export async function POST(request: Request) {
@@ -23,27 +23,22 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const parsed = calendarEventSchema.safeParse(body);
+  const parsed = taskSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   const { data, error } = await supabase
-    .from("calendar_events")
-    .insert({ ...parsed.data, owner_id: user.id })
+    .from("tasks")
+    .insert({
+      ...parsed.data,
+      due_date: parsed.data.due_date || null,
+      description: parsed.data.description || null,
+      owner_id: user.id,
+    })
     .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  // Auto-actualizar estado del lead a "scheduled" si el evento tiene lead vinculado
-  if (parsed.data.lead_id) {
-    await supabase
-      .from("leads")
-      .update({ status: "scheduled" })
-      .eq("id", parsed.data.lead_id)
-      .not("status", "in", '("lost","converted")');
-  }
-
   return NextResponse.json(data, { status: 201 });
 }

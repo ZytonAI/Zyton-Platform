@@ -17,7 +17,6 @@ export async function GET() {
   const { data, error } = await supabase
     .from("workspace_pages")
     .select("*")
-    .eq("owner_id", user.id)
     .order("position", { ascending: true })
     .order("created_at", { ascending: true });
 

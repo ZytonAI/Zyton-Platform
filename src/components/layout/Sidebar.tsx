@@ -13,6 +13,7 @@ import {
   Receipt,
   CalendarDays,
   BookOpen,
+  ListTodo,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -21,6 +22,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard",  icon: LayoutDashboard },
+  { href: "/todo",      label: "To Do",       icon: ListTodo },
   { href: "/leads",     label: "Leads",       icon: Users },
   { href: "/clients",   label: "Clientes",    icon: Briefcase },
   { href: "/wiki",      label: "Wiki",         icon: BookOpen },

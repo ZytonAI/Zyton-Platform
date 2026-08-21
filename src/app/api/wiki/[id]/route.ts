@@ -35,7 +35,6 @@ export async function PATCH(
     .from("workspace_pages")
     .update({ ...allowed, updated_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("owner_id", user.id)
     .select()
     .single();
 
@@ -55,8 +54,7 @@ export async function DELETE(
   const { error } = await supabase
     .from("workspace_pages")
     .delete()
-    .eq("id", id)
-    .eq("owner_id", user.id);
+    .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });

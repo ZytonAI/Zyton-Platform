@@ -20,7 +20,6 @@ export default async function ChatPage({
   const { data: conversations } = await supabase
     .from("conversations")
     .select("*")
-    .eq("owner_id", user!.id)
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(500);
 

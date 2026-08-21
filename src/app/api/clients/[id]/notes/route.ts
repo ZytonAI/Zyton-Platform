@@ -25,7 +25,6 @@ export async function POST(
     .from("clients")
     .select("id")
     .eq("id", id)
-    .eq("owner_id", user.id)
     .single();
   if (!client) return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
 

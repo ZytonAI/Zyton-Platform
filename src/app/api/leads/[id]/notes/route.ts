@@ -25,7 +25,6 @@ export async function POST(
     .from("leads")
     .select("id")
     .eq("id", id)
-    .eq("owner_id", user.id)
     .single();
   if (!lead) return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 });
 

@@ -26,7 +26,6 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("file_attachments")
     .select("id, file_name, storage_path, content_type, size_bytes, created_at")
-    .eq("owner_id", user.id)
     .eq("entity_type", entity_type)
     .eq("entity_id", entity_id)
     .order("created_at", { ascending: false });

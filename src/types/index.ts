@@ -194,3 +194,18 @@ export interface WikiPage {
   created_at: string;
   updated_at: string;
 }
+
+// ── To Do del equipo ────────────────────────────────────────
+export type TaskStatus = "todo" | "in_progress" | "done";
+
+export interface Task {
+  id: string;
+  owner_id: string;
+  assignee: string;
+  title: string;
+  description: string | null;
+  due_date: string | null;
+  status: TaskStatus;
+  created_at: string;
+  updated_at: string;
+}

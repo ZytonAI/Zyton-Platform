@@ -19,7 +19,6 @@ export async function POST(request: Request) {
     .from("conversations")
     .select("wa_chat_id")
     .eq("id", conversation_id)
-    .eq("owner_id", user.id)
     .single();
 
   if (convErr || !conv) {
@@ -44,7 +43,6 @@ export async function POST(request: Request) {
           .from("messages")
           .update({ wa_message_id: messageRow.wa_message_id, status: "sent" })
           .eq("id", retry_message_id)
-          .eq("owner_id", user.id)
           .select()
           .single()
       : await supabase.from("messages").insert(messageRow).select().single();
@@ -69,7 +67,6 @@ export async function POST(request: Request) {
         .from("messages")
         .update({ status: "failed" })
         .eq("id", retry_message_id)
-        .eq("owner_id", user.id)
         .select()
         .single();
       failedMsg = data;
