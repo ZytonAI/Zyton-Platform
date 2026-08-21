@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   const payload = await request.json();
   const { wa_chat_id, contact_phone, contact_name, wa_message_id, body, timestamp } = payload;
 
-  if (!wa_chat_id || !body || !wa_message_id) {
+  if (!wa_chat_id || !body) {
     return NextResponse.json({ error: "Payload invalido" }, { status: 400 });
   }
 
@@ -30,14 +30,17 @@ export async function POST(request: Request) {
   const owner_id = session.owner_id;
 
   // Si el bridge ya guardó este mensaje directamente en Supabase, no duplicar
-  const { data: existingMsg } = await supabase
-    .from("messages")
-    .select("id")
-    .eq("wa_message_id", wa_message_id)
-    .maybeSingle();
+  // (solo se puede verificar si el bridge mandó un wa_message_id)
+  if (wa_message_id) {
+    const { data: existingMsg } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("wa_message_id", wa_message_id)
+      .maybeSingle();
 
-  if (existingMsg) {
-    return NextResponse.json({ ok: true, skipped: true });
+    if (existingMsg) {
+      return NextResponse.json({ ok: true, skipped: true });
+    }
   }
 
   // Buscar conversación: primero exacta, luego por sufijo de 10 dígitos
@@ -126,21 +129,26 @@ export async function POST(request: Request) {
 
   await supabase.rpc("increment_unread", { conversation_id: convId });
 
-  const { error: msgErr } = await supabase.from("messages").upsert(
-    {
-      owner_id,
-      conversation_id: convId,
-      wa_message_id,
-      direction: "inbound",
-      body,
-      status: "delivered",
-      created_at: timestamp ?? new Date().toISOString(),
-    },
-    { onConflict: "wa_message_id", ignoreDuplicates: true }
-  );
+  // Sin wa_message_id no podemos deduplicar de forma segura contra el guardado
+  // directo que ya hace el bridge de WhatsApp — se omite el insert para no duplicar
+  // el mensaje, pero se sigue con la conversación y la notificación a Diana.
+  if (wa_message_id) {
+    const { error: msgErr } = await supabase.from("messages").upsert(
+      {
+        owner_id,
+        conversation_id: convId,
+        wa_message_id,
+        direction: "inbound",
+        body,
+        status: "delivered",
+        created_at: timestamp ?? new Date().toISOString(),
+      },
+      { onConflict: "wa_message_id", ignoreDuplicates: true }
+    );
 
-  if (msgErr) {
-    return NextResponse.json({ error: "Error guardando mensaje" }, { status: 500 });
+    if (msgErr) {
+      return NextResponse.json({ error: "Error guardando mensaje" }, { status: 500 });
+    }
   }
 
   // Notificar a Diana en Telegram cuando llega un mensaje nuevo

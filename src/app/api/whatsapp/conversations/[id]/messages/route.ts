@@ -16,7 +16,6 @@ export async function GET(
     .from("conversations")
     .select("id")
     .eq("id", id)
-    .eq("owner_id", user.id)
     .single();
 
   if (!conv) return NextResponse.json({ error: "No encontrada" }, { status: 404 });
@@ -33,8 +32,7 @@ export async function GET(
   await supabase
     .from("conversations")
     .update({ unread_count: 0 })
-    .eq("id", id)
-    .eq("owner_id", user.id);
+    .eq("id", id);
 
   return NextResponse.json(data ?? []);
 }

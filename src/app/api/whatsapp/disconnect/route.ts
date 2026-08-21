@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceSession } from "@/lib/wa-session";
 import { disconnectBridge } from "@/lib/wa-bridge";
 
 export async function POST() {
@@ -12,10 +13,14 @@ export async function POST() {
   try {
     await disconnectBridge();
 
-    await supabase
-      .from("wa_sessions")
-      .update({ status: "disconnected", phone: null, updated_at: new Date().toISOString() })
-      .eq("owner_id", user.id);
+    // Se desconecta la sesión del workspace (la comparten los cuatro)
+    const session = await getWorkspaceSession(supabase);
+    if (session) {
+      await supabase
+        .from("wa_sessions")
+        .update({ status: "disconnected", phone: null, updated_at: new Date().toISOString() })
+        .eq("id", session.id);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

@@ -17,7 +17,6 @@ export async function POST(request: Request) {
     .from("conversations")
     .select("wa_chat_id")
     .eq("id", conversation_id)
-    .eq("owner_id", user.id)
     .single();
 
   if (convErr || !conv) {

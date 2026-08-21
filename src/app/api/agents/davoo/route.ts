@@ -108,7 +108,6 @@ export async function POST(request: Request) {
         const { data: leads, error: leadsErr } = await supabase
           .from("leads")
           .select("id, name, website, notes")
-          .eq("owner_id", user.id)
           .eq("analyzed", true)
           .not("website", "is", null)
           .neq("website", "Sin página web")
@@ -131,7 +130,6 @@ export async function POST(request: Request) {
         const { data: existingPrompts } = await supabase
           .from("file_attachments")
           .select("entity_id")
-          .eq("owner_id", user.id)
           .eq("content_type", "text/markdown")
           .in(
             "entity_id",
@@ -172,7 +170,6 @@ export async function POST(request: Request) {
             const { data: attachments } = await supabase
               .from("file_attachments")
               .select("content")
-              .eq("owner_id", user.id)
               .eq("entity_id", lead.id)
               .eq("content_type", "text/html")
               .limit(1);

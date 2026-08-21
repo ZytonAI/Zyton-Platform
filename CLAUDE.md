@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Zyton Platform** — Hub centralizado de gestión empresarial para ZytonAI. Incluye gestión de leads, clientes, chat integrado con WhatsApp, y agentes de IA (futuro).
+**Zyton Platform** — Hub centralizado de gestión empresarial para ZytonAI. Incluye gestión de leads, clientes, chat integrado con WhatsApp, tablero To Do del equipo, y agentes de IA.
+
+**Equipo (4 personas)**: Samuel, Camilo, Santiago y Daniel. Es un workspace **compartido**: los cuatro ven y editan los mismos leads, clientes, facturas, calendario, wiki y chat. `owner_id` sigue existiendo en las tablas como autoría (quién creó el registro), pero no restringe visibilidad. Lo único personal es el historial de Diana (`diana_messages`, `diana_tasks`, `diana_action_log`).
+
+La lista del equipo vive en `src/lib/team.ts` (fuente única). Al cambiarla, actualizar también el `CHECK (assignee IN ...)` de `supabase/migrations/014_tasks.sql` y la lista `TEAM` de `scripts/create-users.mjs`.
 
 ## Stack
 
@@ -52,12 +56,14 @@ src/
     (platform)/           # Rutas con sidebar — require auth
       layout.tsx          # Valida sesión server-side, muestra Sidebar
       dashboard/
+      todo/               # Tablero de tareas por persona
       leads/
       clients/
       chat/
       agents/
     api/
       auth/callback/      # Callback de Supabase Auth
+      tasks/              # CRUD del To Do
       leads/              # CRUD (Stage 2)
       clients/            # CRUD (Stage 2)
       attachments/        # Upload a Supabase Storage (Stage 2)
@@ -67,11 +73,13 @@ src/
     layout/TopBar.tsx     # Header con usuario
     ui/                   # Componentes shadcn/ui
   lib/
+    team.ts               # Los 4 miembros del equipo (slug, nombre, email, color)
     supabase/client.ts    # Browser client (anon key)
     supabase/server.ts    # Server client (cookies)
   middleware.ts           # Redirige no-autenticados a /login
 
 whatsapp-service/         # Servicio Node.js separado (Stage 3)
+scripts/create-users.mjs  # Alta de las cuentas del equipo en Supabase Auth
 supabase/migrations/      # SQL con schema y políticas RLS
 ```
 
@@ -79,7 +87,7 @@ supabase/migrations/      # SQL con schema y políticas RLS
 
 1. Crear proyecto en supabase.com
 2. Copiar URL y anon key a `.env.local`
-3. Ir a SQL Editor y ejecutar `supabase/migrations/001_initial_schema.sql`
+3. Ir a SQL Editor y ejecutar las migraciones de `supabase/migrations/` en orden numérico
 4. Crear bucket privado llamado `attachments` en Storage
 5. Agregar políticas de storage (ver comentarios al final del SQL)
 
@@ -91,3 +99,14 @@ supabase/migrations/      # SQL con schema y políticas RLS
 | 2 | CRM: Leads y Clientes | Pendiente |
 | 3 | Chat / WhatsApp integrado | Pendiente |
 | 4 | Agentes IA + Polish | Pendiente |
+
+## Usuarios del equipo
+
+Las cuentas de login se crean con el service role, nunca desde el navegador:
+
+```bash
+node scripts/create-users.mjs           # crea las que falten
+node scripts/create-users.mjs --reset   # además resetea contraseñas existentes
+```
+
+Imprime las contraseñas temporales una sola vez — hay que compartirlas y pedir que las cambien.

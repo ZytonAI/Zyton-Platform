@@ -41,7 +41,6 @@ export async function POST(request: Request) {
       .from("leads")
       .update({ status: "scheduled" })
       .eq("id", parsed.data.lead_id)
-      .eq("owner_id", user.id)
       .not("status", "in", '("lost","converted")');
   }
 

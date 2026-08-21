@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { taskSchema } from "@/lib/validations/task.schema";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -7,13 +8,13 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data, error } = await supabase
-    .from("workspace_pages")
+    .from("tasks")
     .select("*")
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: true });
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  return NextResponse.json(data ?? []);
 }
 
 export async function POST(request: Request) {
@@ -22,11 +23,19 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { title = "Sin título", content = { type: "doc", content: [{ type: "paragraph" }] }, parent_id = null, icon = "📄" } = body;
+  const parsed = taskSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
 
   const { data, error } = await supabase
-    .from("workspace_pages")
-    .insert({ owner_id: user.id, title, content, parent_id, icon })
+    .from("tasks")
+    .insert({
+      ...parsed.data,
+      due_date: parsed.data.due_date || null,
+      description: parsed.data.description || null,
+      owner_id: user.id,
+    })
     .select()
     .single();
 
