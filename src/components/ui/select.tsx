@@ -6,7 +6,46 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+/**
+ * Base UI pinta en el disparador el *valor* seleccionado, no su etiqueta: por
+ * eso salía "active" en vez de "Activo" y "none" en vez de "Sin asignar". La
+ * forma correcta es pasarle `items` (valor → etiqueta) a la raíz.
+ *
+ * En vez de repetir ese mapa en cada formulario, se deduce recorriendo los
+ * <SelectItem> que ya están escritos ahí abajo. Si alguien pasa `items` a mano,
+ * manda el suyo.
+ */
+function collectItems(
+  node: React.ReactNode,
+  acc: Record<string, React.ReactNode> = {}
+): Record<string, React.ReactNode> {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { value?: unknown; children?: React.ReactNode }
+    if (child.type === SelectItem && typeof props.value === "string") {
+      acc[props.value] = props.children
+    } else if (props.children) {
+      collectItems(props.children, acc)
+    }
+  })
+  return acc
+}
+
+function Select<Value, Multiple extends boolean | undefined = false>({
+  children,
+  items,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const derived = React.useMemo(
+    () => items ?? collectItems(children),
+    [items, children]
+  )
+  return (
+    <SelectPrimitive.Root items={derived} {...(props as SelectPrimitive.Root.Props<Value, Multiple>)}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (

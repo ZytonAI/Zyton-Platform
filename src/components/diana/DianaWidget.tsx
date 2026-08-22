@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { X, Bot, Send } from "lucide-react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
+import { X, Bot, Send, ChevronLeft } from "lucide-react";
 import { DianaChat } from "./DianaChat";
 
 type Tab = "chat" | "telegram";
@@ -39,8 +39,47 @@ function VerifyButton({ onConnected }: { onConnected: () => void }) {
   );
 }
 
+/**
+ * Si el botón está escondido se recuerda en el navegador. Se lee con
+ * useSyncExternalStore para que el servidor pinte siempre el estado visible y
+ * el navegador corrija después, sin desajustes de hidratación.
+ */
+const HIDDEN_KEY = "diana:hidden";
+const HIDDEN_EVENT = "diana:hidden-change";
+
+function subscribeHidden(onChange: () => void) {
+  window.addEventListener(HIDDEN_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(HIDDEN_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+function readHidden() {
+  try {
+    return localStorage.getItem(HIDDEN_KEY) === "1";
+  } catch {
+    // Navegador sin storage (modo privado): se queda visible
+    return false;
+  }
+}
+
+function storeHidden(value: boolean) {
+  try {
+    if (value) localStorage.setItem(HIDDEN_KEY, "1");
+    else localStorage.removeItem(HIDDEN_KEY);
+  } catch {
+    // Sin storage no se recuerda, pero la sesión actual sí responde
+  }
+  window.dispatchEvent(new Event(HIDDEN_EVENT));
+}
+
 export function DianaWidget() {
   const [open, setOpen] = useState(false);
+  // Escondido = solo queda una pestañita en el borde. Se recuerda por
+  // navegador, así que no hay que volver a esconderlo en cada página.
+  const hidden = useSyncExternalStore(subscribeHidden, readHidden, () => false);
   const [unread, setUnread] = useState(0);
   const [tab, setTab] = useState<Tab>("chat");
   const [telegramConnected, setTelegramConnected] = useState<boolean | null>(null);
@@ -48,6 +87,15 @@ export function DianaWidget() {
   const [generatingToken, setGeneratingToken] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  function hide() {
+    setOpen(false);
+    storeHidden(true);
+  }
+
+  function show() {
+    storeHidden(false);
+  }
 
   // Verificar estado de Telegram al abrir
   useEffect(() => {
@@ -117,7 +165,7 @@ export function DianaWidget() {
 
   return (
     <>
-      {open && (
+      {open && !hidden && (
         <div className="fixed bottom-20 right-4 z-50 w-80 sm:w-96 h-[540px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 bg-indigo-600 text-white shrink-0">
@@ -255,19 +303,44 @@ export function DianaWidget() {
         </div>
       )}
 
-      {/* Botón flotante */}
-      <button
-        onClick={open ? () => setOpen(false) : handleOpen}
-        className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center"
-        aria-label="Abrir chat con Diana"
-      >
-        {open ? <X className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
-        {!open && unread > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
-      </button>
+      {/* Escondido: solo una pestaña discreta en el borde para recuperarlo */}
+      {hidden ? (
+        <button
+          onClick={show}
+          className="fixed bottom-6 right-0 z-50 h-16 w-6 rounded-l-lg bg-indigo-600/70 text-white hover:bg-indigo-600 hover:w-7 transition-all flex items-center justify-center shadow-md"
+          aria-label="Mostrar el chat de Diana"
+          title="Mostrar a Diana"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
+      ) : (
+        /* Botón flotante */
+        <div className="group fixed bottom-4 right-4 z-50">
+          <button
+            onClick={open ? () => setOpen(false) : handleOpen}
+            className="w-12 h-12 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center"
+            aria-label="Abrir chat con Diana"
+          >
+            {open ? <X className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
+            {!open && unread > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </button>
+
+          {/* Esconderlo cuando estorba. En móvil siempre visible; en escritorio,
+              al pasar el mouse, para no ensuciar la esquina. */}
+          <button
+            onClick={hide}
+            className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-gray-700 text-white flex items-center justify-center shadow ring-2 ring-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity"
+            aria-label="Esconder el chat de Diana"
+            title="Esconder"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
     </>
   );
 }
