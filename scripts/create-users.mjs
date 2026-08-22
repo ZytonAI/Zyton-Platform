@@ -40,11 +40,12 @@ if (!url || !serviceKey) {
 
 // ── Equipo ─────────────────────────────────────────────────
 // Debe coincidir con TEAM_MEMBERS en src/lib/team.ts
+// role: "owner" = Dueño (ve todo) | "partner" = Socio Estratégico (todo menos cobros)
 const TEAM = [
-  { slug: "samuel",   name: "Samuel",   username: "SamuelZY",   email: "zyton.automation@gmail.com" },
-  { slug: "camilo",   name: "Camilo",   username: "CamiloZY",   email: "camilo@zytonai.com" },
-  { slug: "santiago", name: "Santiago", username: "SantiagoZY", email: "santiago@zytonai.com" },
-  { slug: "daniel",   name: "Daniel",   username: "DanielZY",   email: "daniel@zytonai.com" },
+  { slug: "samuel",   name: "Samuel",   username: "SamuelZY",   email: "zyton.automation@gmail.com", role: "owner" },
+  { slug: "camilo",   name: "Camilo",   username: "CamiloZY",   email: "camilo@zytonai.com",         role: "partner" },
+  { slug: "santiago", name: "Santiago", username: "SantiagoZY", email: "santiago@zytonai.com",       role: "partner" },
+  { slug: "daniel",   name: "Daniel",   username: "DanielZY",   email: "daniel@zytonai.com",         role: "partner" },
 ];
 
 const reset = process.argv.includes("--reset");
@@ -78,7 +79,7 @@ for (const member of TEAM) {
     if (reset) {
       const { error } = await supabase.auth.admin.updateUserById(found.id, {
         password,
-        user_metadata: { full_name: member.name, slug: member.slug, username: member.username },
+        user_metadata: { full_name: member.name, slug: member.slug, username: member.username, role: member.role },
       });
       if (error) {
         console.error(`✗ ${member.email}: ${error.message}`);
@@ -88,7 +89,7 @@ for (const member of TEAM) {
     } else {
       console.log(`• ${member.email} ya existe — se omite (usa --reset para cambiar la contraseña)`);
     }
-    await supabase.from("profiles").upsert({ id: found.id, full_name: member.name, username: member.username });
+    await supabase.from("profiles").upsert({ id: found.id, full_name: member.name, username: member.username, role: member.role });
     continue;
   }
 
@@ -96,7 +97,7 @@ for (const member of TEAM) {
     email: member.email,
     password,
     email_confirm: true,
-    user_metadata: { full_name: member.name, slug: member.slug, username: member.username },
+    user_metadata: { full_name: member.name, slug: member.slug, username: member.username, role: member.role },
   });
 
   if (error) {
@@ -104,7 +105,7 @@ for (const member of TEAM) {
     continue;
   }
 
-  await supabase.from("profiles").upsert({ id: data.user.id, full_name: member.name, username: member.username });
+  await supabase.from("profiles").upsert({ id: data.user.id, full_name: member.name, username: member.username, role: member.role });
   credentials.push({ ...member, password, action: "creado" });
 }
 
@@ -114,9 +115,10 @@ if (credentials.length === 0) {
 }
 
 console.log("\n─────────────────────────────────────────────");
-console.log(" Credenciales — usuario y contraseña (compártelas y pide que las cambien)");
+console.log(" Credenciales — usuario, contraseña y rol (compártelas y pide que las cambien)");
 console.log("─────────────────────────────────────────────");
 for (const c of credentials) {
-  console.log(`${c.name.padEnd(9)} ${c.username.padEnd(11)} ${c.password}   (${c.action})`);
+  const roleLabel = c.role === "owner" ? "Dueño" : "Socio Estratégico";
+  console.log(`${c.name.padEnd(9)} ${c.username.padEnd(11)} ${c.password}   ${roleLabel.padEnd(17)} (${c.action})`);
 }
 console.log("─────────────────────────────────────────────\n");

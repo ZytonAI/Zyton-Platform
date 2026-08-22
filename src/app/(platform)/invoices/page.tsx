@@ -1,12 +1,21 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth/session";
+import { isOwner } from "@/lib/permissions";
 import { TopBar } from "@/components/layout/TopBar";
 import { InvoicesClient } from "@/components/invoices/InvoicesClient";
 import { resetRecurringInvoices } from "@/lib/recurring-invoices";
 import type { Invoice } from "@/types";
 
 export default async function InvoicesPage() {
+  // Facturas = los cobros de la empresa: solo el Dueño. Los Socios
+  // Estratégicos ni siquiera ven el ítem en el sidebar, pero si entran a
+  // /invoices a mano se les devuelve al dashboard.
+  const { user, role } = await getSession();
+  if (!user) redirect("/login");
+  if (!isOwner(role)) redirect("/dashboard");
+
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
 
   if (user) {
     // Reciclar facturas recurrentes pagadas cuyo período ya se cumplió —

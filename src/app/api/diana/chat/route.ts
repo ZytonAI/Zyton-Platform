@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { processDianaMessage } from "@/lib/diana-core";
 
@@ -8,8 +9,7 @@ export const maxDuration = 60;
 
 export async function POST(request: Request) {
   // Solo para verificar auth — las queries las hace el service client
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
+  const { user, role } = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json().catch(() => ({})) as {
@@ -31,7 +31,8 @@ export async function POST(request: Request) {
     body.channel ?? "web",
     db,
     baseUrl,
-    body.imageBase64
+    body.imageBase64,
+    role
   );
 
   return NextResponse.json({ reply });

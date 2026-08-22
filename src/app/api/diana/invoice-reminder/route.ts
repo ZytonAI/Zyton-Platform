@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { resetRecurringInvoices } from "@/lib/recurring-invoices";
+import { roleForUserId } from "@/lib/auth/session";
+import { canManageBilling } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  // Vercel Cron envía Authorization: Bearer {CRON_SECRET}
+  // Lo llama el cron interno (src/lib/cron.ts) con Authorization: Bearer {CRON_SECRET}
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
   if (!secret || auth !== `Bearer ${secret}`) {
@@ -59,6 +61,10 @@ export async function GET(request: Request) {
   let reminded = 0;
 
   for (const [ownerId, ownerInvoices] of byOwner) {
+    // Recordatorio de cobros = solo para el Dueño, aunque la factura la haya
+    // creado un Socio Estratégico antes de que existieran los roles.
+    if (!canManageBilling(await roleForUserId(supabase, ownerId))) continue;
+
     const { data: profile } = await supabase
       .from("profiles")
       .select("telegram_chat_id")

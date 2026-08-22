@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   Circle,
   MessageCircle,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent } from "@/types";
@@ -379,6 +380,15 @@ export function EventsClient({ initialEvents }: Props) {
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${TYPE_CHIP_COLORS[event.type] ?? "bg-gray-100 text-gray-600"}`}>
                             {TYPE_LABELS[event.type]}
                           </span>
+                          {/* Los personales solo los ve quien los creó */}
+                          {event.visibility === "personal" && (
+                            <span
+                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground inline-flex items-center gap-1"
+                              title="Evento personal — solo lo ves tú"
+                            >
+                              <Lock className="w-2.5 h-2.5" /> Personal
+                            </span>
+                          )}
                           <span className="text-xs text-muted-foreground">
                             {new Date(event.event_date).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
                           </span>

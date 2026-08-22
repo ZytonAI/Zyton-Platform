@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { TEAM_SLUGS } from "@/lib/team";
+
+/** Etiqueta de persona: slug del equipo, o null si nadie la tiene asignada */
+const memberTag = z.enum(TEAM_SLUGS).nullable().optional();
 
 export const leadSchema = z.object({
   name: z.string().min(1, "El nombre es requerido"),
@@ -11,6 +15,10 @@ export const leadSchema = z.object({
   website: z.string().optional().or(z.literal("")),
   maps_url: z.string().optional().or(z.literal("")),
   notes: z.string().optional().or(z.literal("")),
+  // Etiquetas de equipo — quién hizo qué con este lead
+  contacted_by: memberTag,
+  closed_by: memberTag,
+  scheduled_by: memberTag,
 });
 
 export type LeadFormData = z.infer<typeof leadSchema>;

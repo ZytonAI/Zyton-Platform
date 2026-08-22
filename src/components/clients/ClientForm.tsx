@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import type { Client } from "@/types";
+import { useIsOwner } from "@/components/layout/SessionContext";
+import { MemberSelect } from "@/components/shared/MemberTag";
 
 interface Props {
   open: boolean;
@@ -29,6 +31,9 @@ interface DuplicateInfo {
 
 export function ClientForm({ open, onClose, onSave, initialData }: Props) {
   const isEdit = !!initialData;
+  // Configurar el cobro de un cliente es cosa del Dueño: al Socio Estratégico
+  // no se le muestra el bloque ni se le mandan los campos de billing.
+  const showBilling = useIsOwner();
   const [duplicate, setDuplicate] = useState<DuplicateInfo | null>(null);
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors, isSubmitting } } = useForm<ClientFormData>({
@@ -44,6 +49,8 @@ export function ClientForm({ open, onClose, onSave, initialData }: Props) {
       notes: initialData?.notes ?? "",
       billing_type: initialData?.billing_type ?? null,
       billing_amount: initialData?.billing_amount ?? null,
+      closed_by: initialData?.closed_by ?? null,
+      scheduled_by: initialData?.scheduled_by ?? null,
     },
   });
 
@@ -62,6 +69,8 @@ export function ClientForm({ open, onClose, onSave, initialData }: Props) {
       notes: initialData?.notes ?? "",
       billing_type: initialData?.billing_type ?? null,
       billing_amount: initialData?.billing_amount ?? null,
+      closed_by: initialData?.closed_by ?? null,
+      scheduled_by: initialData?.scheduled_by ?? null,
     });
     setDuplicate(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,15 +78,29 @@ export function ClientForm({ open, onClose, onSave, initialData }: Props) {
 
   const status = watch("status");
   const billingType = watch("billing_type");
+  const closedBy = watch("closed_by");
+  const scheduledBy = watch("scheduled_by");
 
   async function submit(data: ClientFormData, force: boolean) {
     const url = isEdit ? `/api/clients/${initialData.id}` : "/api/clients";
     const method = isEdit ? "PATCH" : "POST";
 
+    // Sin billing_* en el body, el PATCH deja el cobro del cliente intacto
+    // (la ruta solo lo sincroniza si la clave viene en el payload).
+    const payload = { ...data } as Record<string, unknown>;
+    if (!showBilling) {
+      delete payload.billing_type;
+      delete payload.billing_amount;
+    }
+
+    // El updated_at con el que se abrió la ficha: si en la base hay uno más
+    // nuevo, alguien del equipo guardó primero y la API responde 409.
+    if (isEdit) payload.expected_updated_at = initialData.updated_at;
+
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(force ? { ...data, force: true } : data),
+      body: JSON.stringify(force ? { ...payload, force: true } : payload),
     });
 
     if (res.ok) {
@@ -91,6 +114,11 @@ export function ClientForm({ open, onClose, onSave, initialData }: Props) {
 
     if (res.status === 409) {
       const err = await res.json().catch(() => ({}));
+      // Dos cosas responden 409: un duplicado, o que alguien más guardó antes
+      if (err.conflict) {
+        toast.error(err.error ?? "Otra persona guardó cambios en este registro.");
+        return;
+      }
       setDuplicate(err.duplicate_of ?? { type: "client", id: "", name: "otro registro" });
       return;
     }
@@ -148,49 +176,77 @@ export function ClientForm({ open, onClose, onSave, initialData }: Props) {
               <Input {...register("contract_end")} type="date" />
             </div>
 
-            {/* Cobro al cliente — genera automáticamente su factura de tipo "cobro" */}
+            {/* Etiquetas de equipo — quién cerró y quién programa */}
             <div className="col-span-2 rounded-lg border p-3 space-y-3">
               <div>
-                <p className="text-sm font-medium">Cobro al cliente</p>
+                <p className="text-sm font-medium">Equipo</p>
                 <p className="text-xs text-muted-foreground">
-                  Al configurarlo se crea (o actualiza) su factura de cobro automáticamente
+                  Quién trabaja esta cuenta. También decide quién la ve en el chat de WhatsApp.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label>Tipo de cobro</Label>
-                  <Select
-                    value={billingType ?? "none"}
-                    onValueChange={(v) =>
-                      setValue("billing_type", v === "none" ? null : (v as ClientFormData["billing_type"]))
-                    }
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin cobro configurado</SelectItem>
-                      {BILLING_TYPES.map((b) => (
-                        <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Cerrado por</Label>
+                  <MemberSelect
+                    value={closedBy}
+                    onChange={(v) => setValue("closed_by", v as ClientFormData["closed_by"])}
+                  />
                 </div>
-                {billingType && (
-                  <div className="space-y-1">
-                    <Label>Monto {billingType === "monthly" ? "mensual" : ""} *</Label>
-                    <Input
-                      {...register("billing_amount", { valueAsNumber: true })}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                    />
-                    {errors.billing_amount && (
-                      <p className="text-xs text-destructive">{errors.billing_amount.message}</p>
-                    )}
-                  </div>
-                )}
+                <div className="space-y-1">
+                  <Label>Lo programa</Label>
+                  <MemberSelect
+                    value={scheduledBy}
+                    onChange={(v) => setValue("scheduled_by", v as ClientFormData["scheduled_by"])}
+                  />
+                </div>
               </div>
             </div>
+
+            {/* Cobro al cliente — solo el Dueño; genera su factura de tipo "cobro" */}
+            {showBilling && (
+              <div className="col-span-2 rounded-lg border p-3 space-y-3">
+                <div>
+                  <p className="text-sm font-medium">Cobro al cliente</p>
+                  <p className="text-xs text-muted-foreground">
+                    Al configurarlo se crea (o actualiza) su factura de cobro automáticamente
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Tipo de cobro</Label>
+                    <Select
+                      value={billingType ?? "none"}
+                      onValueChange={(v) =>
+                        setValue("billing_type", v === "none" ? null : (v as ClientFormData["billing_type"]))
+                      }
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin cobro configurado</SelectItem>
+                        {BILLING_TYPES.map((b) => (
+                          <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {billingType && (
+                    <div className="space-y-1">
+                      <Label>Monto {billingType === "monthly" ? "mensual" : ""} *</Label>
+                      <Input
+                        {...register("billing_amount", { valueAsNumber: true })}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                      />
+                      {errors.billing_amount && (
+                        <p className="text-xs text-destructive">{errors.billing_amount.message}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="col-span-2 space-y-1">
               <Label>Notas</Label>

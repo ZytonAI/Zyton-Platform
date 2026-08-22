@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth/session";
+import { isOwner } from "@/lib/permissions";
 import { getWorkspaceSession } from "@/lib/wa-session";
 import { disconnectBridge } from "@/lib/wa-bridge";
 
 export async function POST() {
   const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const { user, role } = await getSession();
+  if (!user) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  }
+  // El número lo comparten los cuatro: cerrarlo deja sin chat a todo el equipo
+  if (!isOwner(role)) {
+    return NextResponse.json(
+      { error: "Solo el Dueño puede cerrar la sesión de WhatsApp del equipo." },
+      { status: 403 }
+    );
   }
 
   try {

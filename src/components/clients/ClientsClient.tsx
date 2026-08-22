@@ -14,6 +14,8 @@ import {
 import { toast } from "sonner";
 import { CLIENT_STATUS } from "@/lib/status-config";
 import type { Client, ClientStatus } from "@/types";
+import { MemberBadges } from "@/components/shared/MemberTag";
+import { useMySlug } from "@/components/layout/SessionContext";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -34,6 +36,8 @@ const FILTERS: { label: string; value: string }[] = [
   { label: "Inactivos", value: "inactive" },
   { label: "Perdidos", value: "churned" },
   { label: "Contrato por vencer", value: "expiring" },
+  // Míos = lo cerré yo o yo lo programo
+  { label: "Míos", value: "mine" },
 ];
 
 function formatDate(iso: string) {
@@ -52,6 +56,7 @@ function daysToContractEnd(client: Client): number | null {
 }
 
 export function ClientsClient({ initialClients }: Props) {
+  const mySlug = useMySlug();
   const router = useRouter();
   const [clients, setClients] = useState<Client[]>(initialClients);
   const [search, setSearch] = useState("");
@@ -80,6 +85,7 @@ export function ClientsClient({ initialClients }: Props) {
     );
     const matchFilter =
       filter === "all" ? true :
+      filter === "mine" ? [c.closed_by, c.scheduled_by].includes(mySlug) :
       filter === "expiring" ? (() => {
         const days = daysToContractEnd(c);
         return days !== null && days >= 0 && days <= 30;
@@ -288,6 +294,14 @@ export function ClientsClient({ initialClients }: Props) {
                     </DropdownMenu>
                   </div>
                 </div>
+
+                {/* Etiquetas de equipo — quién cerró / programa */}
+                <MemberBadges
+                  tags={[
+                    { label: "Cerró", slug: client.closed_by },
+                    { label: "Programa", slug: client.scheduled_by },
+                  ]}
+                />
 
                 {/* Contact info */}
                 <div className="space-y-1.5">

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { withColumnFallback } from "@/lib/pg-compat";
 import { leadSchema } from "@/lib/validations/lead.schema";
 import { findDuplicate } from "@/lib/duplicates";
 import { NextResponse } from "next/server";
@@ -31,17 +32,16 @@ export async function POST(request: Request) {
 
   // Detección de duplicados por teléfono/email (se omite con force: true)
   if (body.force !== true) {
-    const duplicate = await findDuplicate(supabase, user.id, parsed.data.phone, parsed.data.email);
+    const duplicate = await findDuplicate(supabase, parsed.data.phone, parsed.data.email);
     if (duplicate) {
       return NextResponse.json({ duplicate_of: duplicate }, { status: 409 });
     }
   }
 
-  const { data, error } = await supabase
-    .from("leads")
-    .insert({ ...parsed.data, owner_id: user.id })
-    .select()
-    .single();
+  const { data, error } = await withColumnFallback(
+    { ...parsed.data, owner_id: user.id },
+    (row) => supabase.from("leads").insert(row).select().single()
+  );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

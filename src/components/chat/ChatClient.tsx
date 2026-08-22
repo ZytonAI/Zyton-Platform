@@ -6,6 +6,9 @@ import { ConversationList } from "./ConversationList";
 import { MessageThread } from "./MessageThread";
 import { WaConnectPanel } from "./WaConnectPanel";
 import type { Conversation, WaSessionStatus } from "@/types";
+import { isMine } from "@/lib/conversation-scope";
+import { useIsOwner } from "@/components/layout/SessionContext";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { MessageCircle, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,15 +17,35 @@ interface Props {
   initialStatus: WaSessionStatus;
   initialConversations: Conversation[];
   preselectedConvId?: string;
+  /** Slug del equipo de quien está viendo — para saber qué chats son suyos */
+  mySlug: string | null;
+  /** El Dueño puede alternar entre ver todo el equipo y solo lo suyo */
+  canSeeAll: boolean;
 }
 
-export function ChatClient({ initialStatus, initialConversations, preselectedConvId }: Props) {
+export function ChatClient({
+  initialStatus,
+  initialConversations,
+  preselectedConvId,
+  mySlug,
+  canSeeAll,
+}: Props) {
   const [status, setStatus] = useState<WaSessionStatus>(initialStatus);
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
+  // Solo el Dueño ve el selector; para el resto la API ya recortó la lista.
+  const [view, setView] = useState<"all" | "mine">("all");
   const [selected, setSelected] = useState<Conversation | null>(
     preselectedConvId ? (initialConversations.find((c) => c.id === preselectedConvId) ?? null) : null
   );
   const supabase = createClient();
+
+  const refreshConversations = useCallback(async () => {
+    const res = await fetch("/api/whatsapp/conversations");
+    if (!res.ok) return;
+    const updated: Conversation[] = await res.json();
+    setConversations(updated);
+    setSelected((prev) => (prev ? updated.find((c) => c.id === prev.id) ?? null : null));
+  }, []);
 
   // Realtime: nuevas conversaciones o actualizaciones
   useEffect(() => {
@@ -31,19 +54,12 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversations" },
-        async () => {
-          const res = await fetch("/api/whatsapp/conversations");
-          if (res.ok) {
-            const updated: Conversation[] = await res.json();
-            setConversations(updated);
-            setSelected((prev) => prev ? updated.find((c) => c.id === prev.id) ?? prev : null);
-          }
-        }
+        refreshConversations
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [supabase]);
+  }, [supabase, refreshConversations]);
 
   const handleConnected = useCallback(() => {
     setStatus("connected");
@@ -51,8 +67,13 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
 
   const [disconnecting, setDisconnecting] = useState(false);
   const [justDisconnected, setJustDisconnected] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  // El número es uno solo para los cuatro: cerrarlo deja sin chat a todo el
+  // equipo, así que solo el Dueño puede hacerlo.
+  const canDisconnect = useIsOwner();
 
   const handleDisconnect = useCallback(async () => {
+    setConfirmDisconnect(false);
     setDisconnecting(true);
     setJustDisconnected(true);
     setStatus("disconnected");
@@ -78,6 +99,15 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
     setSelected((prev) => (prev?.id === id ? null : prev));
   }, []);
 
+  // Vista personal: lo etiquetado como mío + los chats que nadie ha reclamado
+  const visible =
+    canSeeAll && view === "mine"
+      ? conversations.filter((c) => isMine(c, mySlug))
+      : conversations;
+
+  // Si al cambiar de vista el chat abierto ya no está en la lista, se cierra
+  const openConv = selected && visible.some((c) => c.id === selected.id) ? selected : null;
+
   if (status !== "connected") {
     return (
       <div className="h-full">
@@ -95,30 +125,35 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
         className={cn(
           "shrink-0 flex flex-col border-r",
           "w-full md:w-80",
-          selected ? "hidden md:flex" : "flex"
+          openConv ? "hidden md:flex" : "flex"
         )}
       >
         <div className="flex-1 min-h-0">
           <ConversationList
-            conversations={conversations}
-            selectedId={selected?.id ?? null}
+            conversations={visible}
+            view={view}
+            onChangeView={setView}
+            showViewToggle={canSeeAll}
+            selectedId={openConv?.id ?? null}
             onSelect={setSelected}
             onNewConversation={handleNewConversation}
             onDeleteConversation={handleDeleteConversation}
           />
         </div>
-        <div className="p-3 border-t">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-          >
-            <LogOut className="w-4 h-4" />
-            {disconnecting ? "Cerrando sesión..." : "Cerrar sesión de WhatsApp"}
-          </Button>
-        </div>
+        {canDisconnect && (
+          <div className="p-3 border-t">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setConfirmDisconnect(true)}
+              disabled={disconnecting}
+            >
+              <LogOut className="w-4 h-4" />
+              {disconnecting ? "Cerrando sesión..." : "Cerrar sesión de WhatsApp"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Panel derecho — hilo de mensajes
@@ -127,14 +162,15 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
       <div
         className={cn(
           "flex-1 min-w-0",
-          !selected && "hidden md:block"
+          !openConv && "hidden md:block"
         )}
       >
-        {selected ? (
+        {openConv ? (
           <MessageThread
-            key={selected.id}
-            conversation={selected}
+            key={openConv.id}
+            conversation={openConv}
             onBack={() => setSelected(null)}
+            onReassigned={refreshConversations}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-6">
@@ -148,6 +184,17 @@ export function ChatClient({ initialStatus, initialConversations, preselectedCon
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDisconnect}
+        title="Cerrar la sesión de WhatsApp"
+        description="El número es uno solo para todo el equipo: al cerrarlo, los cuatro se quedan sin chat hasta que alguien vuelva a escanear el código QR."
+        confirmLabel="Cerrar sesión"
+        loadingLabel="Cerrando..."
+        loading={disconnecting}
+        onConfirm={handleDisconnect}
+        onCancel={() => setConfirmDisconnect(false)}
+      />
     </div>
   );
 }

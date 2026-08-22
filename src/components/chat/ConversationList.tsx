@@ -10,7 +10,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Search, MessageCircle, Plus, Loader2, Trash2 } from "lucide-react";
+import { Search, MessageCircle, Plus, Loader2, Trash2, Users, User } from "lucide-react";
+import { memberBySlug } from "@/lib/team";
 import { toast } from "sonner";
 import type { Conversation } from "@/types";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,18 @@ function timeAgo(iso: string | null) {
   return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
 }
 
+/** Punto del color de quien trabaja el chat. Sin dueño, no pinta nada. */
+function OwnerDot({ slug }: { slug: string | null | undefined }) {
+  const member = memberBySlug(slug ?? "");
+  if (!member) return null;
+  return (
+    <span
+      className={cn("w-2 h-2 rounded-full shrink-0", member.dot)}
+      title={`Lo trabaja ${member.name}`}
+    />
+  );
+}
+
 function initials(name: string | null, phone: string) {
   if (name) return name.slice(0, 2).toUpperCase();
   return phone.slice(-2);
@@ -37,9 +50,22 @@ interface Props {
   onSelect: (conv: Conversation) => void;
   onNewConversation: (conv: Conversation) => void;
   onDeleteConversation: (id: string) => void;
+  /** Vista actual — solo el Dueño puede cambiarla */
+  view: "all" | "mine";
+  onChangeView: (view: "all" | "mine") => void;
+  showViewToggle: boolean;
 }
 
-export function ConversationList({ conversations, selectedId, onSelect, onNewConversation, onDeleteConversation }: Props) {
+export function ConversationList({
+  conversations,
+  selectedId,
+  onSelect,
+  onNewConversation,
+  onDeleteConversation,
+  view,
+  onChangeView,
+  showViewToggle,
+}: Props) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState("");
@@ -118,6 +144,31 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
         </Button>
       </div>
 
+      {/* Vista general vs personal — solo para el Dueño; los Socios
+          Estratégicos ya reciben la lista recortada desde el servidor. */}
+      {showViewToggle && (
+        <div className="px-3 pb-3 flex gap-1.5">
+          {([
+            { value: "all",  label: "Todo el equipo", icon: Users },
+            { value: "mine", label: "Solo míos",      icon: User },
+          ] as const).map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              onClick={() => onChangeView(value)}
+              className={cn(
+                "flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                view === value
+                  ? "bg-foreground text-background"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
@@ -144,8 +195,9 @@ export function ConversationList({ conversations, selectedId, onSelect, onNewCon
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
-                    <span className="font-medium text-sm text-foreground truncate">
-                      {conv.contact_name ?? conv.contact_phone}
+                    <span className="font-medium text-sm text-foreground truncate flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">{conv.contact_name ?? conv.contact_phone}</span>
+                      <OwnerDot slug={conv.assigned_to} />
                     </span>
                     <span className="text-xs text-muted-foreground shrink-0 group-hover:hidden">
                       {timeAgo(conv.last_message_at)}

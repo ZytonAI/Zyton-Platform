@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zyton Platform
 
-## Getting Started
+Hub interno de ZytonAI: leads, clientes, facturas, calendario, wiki, tareas, chat de WhatsApp y agentes de IA. Next.js 16 (App Router) + Supabase, desplegado en **EasyPanel** con Docker.
 
-First, run the development server:
+Para el detalle de arquitectura, roles y convenciones, ver [CLAUDE.md](CLAUDE.md).
+
+## Desarrollo local
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local     # llenar con las claves de Supabase
+npm run dev                    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Se entra con usuario (`SamuelZY`, `CamiloZY`, …), no con email. Las cuentas se crean con:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+node scripts/create-users.mjs            # crea las que falten
+node scripts/create-users.mjs --reset    # resetea contraseñas
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Base de datos
 
-## Learn More
+Supabase (PostgreSQL + RLS + Storage). Las migraciones de `supabase/migrations/` se ejecutan a mano en el SQL Editor, **en orden numérico**. Ojo: hay números repetidos (008, 009, 010, 013, 014, 015) porque salieron de ramas paralelas; dentro del mismo número el orden da igual.
 
-To learn more about Next.js, take a look at the following resources:
+También hay que crear el bucket privado `attachments` en Storage.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy — EasyPanel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+La app se construye con el [`Dockerfile`](Dockerfile) de la raíz (multi-stage, `output: standalone`).
 
-## Deploy on Vercel
+Las `NEXT_PUBLIC_*` se incrustan en el bundle del cliente **durante el build**, así que van como *build args*, no como variables de runtime:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+El resto (`SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `WA_BRIDGE_TOKEN`, `TELEGRAM_BOT_TOKEN`, `CRON_SECRET`, …) van como variables de entorno normales. Lista completa en `.env.example`.
+
+El servicio de WhatsApp corre aparte, desde [`whatsapp-service/`](whatsapp-service/) (contrato en [docs/wa-bridge-contract.md](docs/wa-bridge-contract.md)).
+
+### Cron de recordatorios de facturas
+
+`/api/diana/invoice-reminder` recicla las facturas recurrentes, marca las vencidas y le avisa al Dueño por Telegram.
+
+**Corre solo**: el contenedor en EasyPanel vive 24/7, así que el propio servidor se programa la tarea al arrancar ([`src/instrumentation.ts`](src/instrumentation.ts) → [`src/lib/cron.ts`](src/lib/cron.ts)). No hay nada que configurar en el panel más allá de las variables:
+
+| Variable | Efecto |
+|---|---|
+| `CRON_SECRET` | **Obligatoria.** Sin ella el cron no se programa (la ruta respondería 401). |
+| `INVOICE_REMINDER_AT` | Hora de la corrida, `HH:MM` en **UTC**. Default `14:00` = 9:00 a.m. en Colombia. |
+| `ENABLE_CRON=1` | Solo para probarlo en local; en producción no hace falta. |
+| `DISABLE_CRON=1` | Apaga el cron interno (ver alternativa abajo). |
+
+En los logs de EasyPanel se ve al arrancar y en cada corrida:
+
+```
+[cron] invoice-reminder programado a las 14:00 UTC — próxima corrida en 7h 12m
+[cron] invoice-reminder ok — {"ok":true,"recurringReset":0,"reminded":2}
+```
+
+Dos cosas a tener en cuenta: si algún día se escala a más de una réplica, cada una dispararía su propia corrida; y un redeploy justo a esa hora puede saltarse la del día. Para esos casos, o si prefieres verlo en el panel, se puede apagar el interno con `DISABLE_CRON=1` y crear una Scheduled Task en EasyPanel:
+
+```
+0 14 * * *   curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://TU-DOMINIO/api/diana/invoice-reminder
+```
+
+Si el cron queda apagado la app sigue funcionando: el reciclaje de recurrentes también corre al abrir la página de Facturas, pero los avisos de Telegram no salen y las vencidas no pasan a `overdue` en base.
+
+## Comandos
+
+```bash
+npm run dev      # desarrollo
+npm run build    # build de producción
+npm run start    # servir el build local
+npm run lint     # ESLint
+```

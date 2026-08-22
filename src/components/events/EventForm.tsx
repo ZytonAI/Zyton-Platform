@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Lock, Users } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent } from "@/types";
 
@@ -80,6 +81,7 @@ export function EventForm({ open, onClose, onSave, initialData, defaultDate }: P
       type:        initialData?.type ?? "event",
       description: initialData?.description ?? "",
       status:      initialData?.status ?? "pending",
+      visibility:  initialData?.visibility ?? "team",
     },
   });
 
@@ -93,12 +95,14 @@ export function EventForm({ open, onClose, onSave, initialData, defaultDate }: P
       type:        initialData?.type ?? "event",
       description: initialData?.description ?? "",
       status:      initialData?.status ?? "pending",
+      visibility:  initialData?.visibility ?? "team",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData]);
 
   const type = watch("type");
   const status = watch("status");
+  const visibility = watch("visibility");
 
   async function onSubmit(data: CalendarEventFormData) {
     if (!dateVal) {
@@ -197,6 +201,25 @@ export function EventForm({ open, onClose, onSave, initialData, defaultDate }: P
                 <SelectContent>
                   <SelectItem value="pending">Pendiente</SelectItem>
                   <SelectItem value="done">Hecho</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Personal = solo lo ve quien lo crea; grupal = todo el equipo */}
+            <div className="col-span-2 space-y-1">
+              <Label>Visibilidad</Label>
+              <Select
+                value={visibility ?? "team"}
+                onValueChange={(v) => setValue("visibility", v as CalendarEventFormData["visibility"])}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="team">
+                    <span className="flex items-center gap-2"><Users className="w-3.5 h-3.5" /> Grupal — lo ve todo el equipo</span>
+                  </SelectItem>
+                  <SelectItem value="personal">
+                    <span className="flex items-center gap-2"><Lock className="w-3.5 h-3.5" /> Personal — solo yo</span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

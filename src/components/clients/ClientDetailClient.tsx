@@ -13,6 +13,9 @@ import { AddNote } from "@/components/shared/AddNote";
 import { ArrowLeft, Pencil, Trash2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import type { Client, HistoryEvent, FileAttachment, Invoice } from "@/types";
+import { useIsOwner } from "@/components/layout/SessionContext";
+import { MemberBadges } from "@/components/shared/MemberTag";
+import { useMemberById } from "@/components/layout/SessionContext";
 
 interface Props {
   client: Client;
@@ -46,8 +49,11 @@ function billingLabel(client: Client) {
 }
 
 export function ClientDetailClient({ client: initialClient, history: initialHistory, attachments: initialAttachments, invoices = [] }: Props) {
+  // El cobro del cliente y sus facturas son solo del Dueño
+  const showBilling = useIsOwner();
   const router = useRouter();
   const [client, setClient] = useState(initialClient);
+  const creator = useMemberById(client.owner_id);
   const [history, setHistory] = useState(initialHistory);
   const [attachments, setAttachments] = useState(initialAttachments);
   const [showEdit, setShowEdit] = useState(false);
@@ -95,7 +101,24 @@ export function ClientDetailClient({ client: initialClient, history: initialHist
               <Field label="Empresa" value={client.company} />
               <Field label="Inicio contrato" value={formatDate(client.contract_start)} />
               <Field label="Fin contrato" value={formatDate(client.contract_end)} />
-              <Field label="Cobro" value={billingLabel(client)} />
+              {showBilling && <Field label="Cobro" value={billingLabel(client)} />}
+              <div className="col-span-2">
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  Equipo
+                  {creator && (
+                    <span className="ml-2 font-normal">· creado por {creator.name}</span>
+                  )}
+                </p>
+                <MemberBadges
+                  tags={[
+                    { label: "Cerró", slug: client.closed_by },
+                    { label: "Programa", slug: client.scheduled_by },
+                  ]}
+                />
+                {!client.closed_by && !client.scheduled_by && (
+                  <p className="text-sm text-muted-foreground">Sin asignar</p>
+                )}
+              </div>
               {client.notes && (
                 <div className="col-span-2">
                   <p className="text-xs text-muted-foreground">Notas</p>
@@ -105,44 +128,46 @@ export function ClientDetailClient({ client: initialClient, history: initialHist
             </CardContent>
           </Card>
 
-          {/* Facturas del cliente */}
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Facturas</CardTitle>
-                <Receipt className="w-4 h-4 text-muted-foreground" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              {invoices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Este cliente no tiene facturas asociadas. Asígnale una desde la sección Facturas.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {invoices.map((inv) => (
-                    <div key={inv.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50 last:border-0">
-                      <span className="truncate font-medium max-w-[35%]">{inv.title}</span>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <StatusBadge status={inv.type} type="invoiceType" />
-                        <span className="font-mono text-xs tabular-nums">
-                          ${Number(inv.amount).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-muted-foreground text-xs">{formatDate(inv.due_date)}</span>
-                        <StatusBadge status={inv.status} type="invoice" />
-                      </div>
-                    </div>
-                  ))}
-                  <div className="flex items-center justify-between pt-2 text-sm font-semibold">
-                    <span>Cobrado a este cliente</span>
-                    <span className="font-mono tabular-nums text-sky-600 dark:text-sky-400">
-                      ${invoices.filter((i) => i.type === "receivable").reduce((a, i) => a + Number(i.amount), 0).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
+          {/* Facturas del cliente — solo el Dueño */}
+          {showBilling && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Facturas</CardTitle>
+                  <Receipt className="w-4 h-4 text-muted-foreground" />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent>
+                {invoices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Este cliente no tiene facturas asociadas. Asígnale una desde la sección Facturas.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {invoices.map((inv) => (
+                      <div key={inv.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50 last:border-0">
+                        <span className="truncate font-medium max-w-[35%]">{inv.title}</span>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <StatusBadge status={inv.type} type="invoiceType" />
+                          <span className="font-mono text-xs tabular-nums">
+                            ${Number(inv.amount).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-muted-foreground text-xs">{formatDate(inv.due_date)}</span>
+                          <StatusBadge status={inv.status} type="invoice" />
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-2 text-sm font-semibold">
+                      <span>Cobrado a este cliente</span>
+                      <span className="font-mono tabular-nums text-sky-600 dark:text-sky-400">
+                        ${invoices.filter((i) => i.type === "receivable").reduce((a, i) => a + Number(i.amount), 0).toLocaleString("es-CO", { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">

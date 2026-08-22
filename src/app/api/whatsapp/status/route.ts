@@ -26,16 +26,21 @@ export async function GET() {
   try {
     const bridgeStatus = await getBridgeStatus();
 
-    await supabase.from("wa_sessions").upsert(
-      {
-        owner_id: session?.owner_id ?? user.id,
-        status: bridgeStatus.status,
-        phone: bridgeStatus.phone,
-        qr_code: bridgeStatus.qr,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "owner_id" }
-    );
+    // Una sola fila para todo el equipo: se actualiza la que haya, y solo se
+    // crea si nadie ha conectado nunca. (Antes era un upsert por owner_id,
+    // de cuando cada quien conectaba su propio número.)
+    const row = {
+      status: bridgeStatus.status,
+      phone: bridgeStatus.phone,
+      qr_code: bridgeStatus.qr,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (session) {
+      await supabase.from("wa_sessions").update(row).eq("id", session.id);
+    } else {
+      await supabase.from("wa_sessions").insert({ ...row, owner_id: user.id });
+    }
 
     return jsonNoStore(bridgeStatus);
   } catch (err) {

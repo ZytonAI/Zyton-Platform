@@ -18,6 +18,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from "sonner";
 import { LEAD_STATUS, LEAD_STATUS_ORDER } from "@/lib/status-config";
 import type { Lead, LeadStatus } from "@/types";
+import { MemberBadges } from "@/components/shared/MemberTag";
+import { useMySlug } from "@/components/layout/SessionContext";
 import { cn } from "@/lib/utils";
 
 interface Props { initialLeads: Lead[] }
@@ -33,6 +35,8 @@ const FILTERS: { label: string; value: string }[] = [
   { label: "No interesados", value: "lost" },
   { label: "Compraron",      value: "converted" },
   { label: "Alta prioridad", value: "alta" },
+  // Míos = cualquiera de las tres etiquetas apunta a quien está mirando
+  { label: "Míos",           value: "mine" },
 ];
 
 function timeAgo(iso: string) {
@@ -46,6 +50,7 @@ function timeAgo(iso: string) {
 }
 
 export function LeadsClient({ initialLeads }: Props) {
+  const mySlug = useMySlug();
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [search, setSearch] = useState("");
@@ -149,6 +154,7 @@ export function LeadsClient({ initialLeads }: Props) {
     );
     const matchFilter =
       filter === "all"      ? true :
+      filter === "mine"     ? [l.contacted_by, l.closed_by, l.scheduled_by].includes(mySlug) :
       filter === "alta"     ? l.priority === "alta" :
       filter === "raul"     ? l.source === "raul" :
       filter === "analyzed" ? l.analyzed :
@@ -440,6 +446,15 @@ export function LeadsClient({ initialLeads }: Props) {
                   </div>
                 )}
               </div>
+
+              {/* Etiquetas de equipo — quién contactó / cerró / programa */}
+              <MemberBadges
+                tags={[
+                  { label: "Contactó", slug: lead.contacted_by },
+                  { label: "Cerró", slug: lead.closed_by },
+                  { label: "Programa", slug: lead.scheduled_by },
+                ]}
+              />
 
               {/* Footer badges */}
               <div className="flex items-center gap-1.5 flex-wrap pt-3 border-t border-border/60">

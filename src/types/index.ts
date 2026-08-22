@@ -1,4 +1,12 @@
+import type { TeamSlug } from "@/lib/team";
+
 export type LeadStatus = "new" | "contacted" | "scheduled" | "qualified" | "lost" | "converted";
+
+/**
+ * Etiqueta de persona: el slug de un miembro del equipo (ver src/lib/team.ts)
+ * o null cuando nadie la tiene asignada.
+ */
+export type MemberTag = TeamSlug | null;
 export type ClientStatus = "active" | "inactive" | "churned";
 
 export interface Lead {
@@ -15,6 +23,12 @@ export interface Lead {
   maps_url: string | null;
   analyzed: boolean;
   priority: "alta" | "media" | "baja" | null;
+  /** Quién lo contactó */
+  contacted_by: MemberTag;
+  /** Quién lo cerró */
+  closed_by: MemberTag;
+  /** Quién lo va a programar */
+  scheduled_by: MemberTag;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +52,10 @@ export interface Client {
   billing_amount: number | null;
   /** Factura de cobro generada/sincronizada automáticamente a partir de billing_type/billing_amount */
   billing_invoice_id: string | null;
+  /** Quién cerró al cliente */
+  closed_by: MemberTag;
+  /** Quién lo va a programar */
+  scheduled_by: MemberTag;
   created_at: string;
   updated_at: string;
 }
@@ -47,11 +65,15 @@ export interface HistoryEvent {
   event_type: string;
   description: string | null;
   metadata: Record<string, unknown> | null;
+  /** Quién lo hizo — se resuelve a persona con el directorio */
+  owner_id: string | null;
   created_at: string;
 }
 
 export interface FileAttachment {
   id: string;
+  /** Quién lo subió — se resuelve a persona con el directorio */
+  owner_id?: string | null;
   file_name: string;
   storage_path: string;
   content_type: string | null;
@@ -76,6 +98,12 @@ export interface Conversation {
   unread_count: number;
   created_at: string;
   updated_at: string;
+  /**
+   * Slug de quien trabaja este chat, derivado del lead vinculado
+   * (contacted_by) o del cliente (closed_by). null = sin dueño, lo ve todo
+   * el equipo. Lo calcula el servidor, no es una columna de la tabla.
+   */
+  assigned_to?: MemberTag;
 }
 
 export interface Message {
@@ -147,6 +175,8 @@ export type InvoiceType = "payable" | "receivable";
 export type RecurrenceInterval = "weekly" | "biweekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
 export type CalendarEventType = "event" | "task" | "deadline";
 export type CalendarEventStatus = "pending" | "done";
+/** team = lo ve todo el equipo; personal = solo quien lo creó */
+export type CalendarEventVisibility = "team" | "personal";
 
 export interface Invoice {
   id: string;
@@ -178,6 +208,7 @@ export interface CalendarEvent {
   type: CalendarEventType;
   description: string | null;
   status: CalendarEventStatus;
+  visibility: CalendarEventVisibility;
   lead_id: string | null;
   created_at: string;
   updated_at: string;
@@ -191,6 +222,10 @@ export interface WikiPage {
   parent_id: string | null;
   icon: string;
   position: number;
+  /** team = la ve el equipo; personal = solo quien la creó */
+  visibility: CalendarEventVisibility;
+  /** Quién guardó por última vez */
+  updated_by: string | null;
   created_at: string;
   updated_at: string;
 }

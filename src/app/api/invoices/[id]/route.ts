@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { denyIfNotOwner } from "@/lib/auth/session";
 import { invoiceUpdateSchema } from "@/lib/validations/invoice.schema";
 import { NextResponse } from "next/server";
 
@@ -7,6 +8,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  // Los cobros son solo del Dueño (ver src/lib/permissions.ts)
+  const denied = await denyIfNotOwner();
+  if (denied) return denied;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -26,6 +31,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  // Los cobros son solo del Dueño (ver src/lib/permissions.ts)
+  const denied = await denyIfNotOwner();
+  if (denied) return denied;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -52,6 +61,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  // Los cobros son solo del Dueño (ver src/lib/permissions.ts)
+  const denied = await denyIfNotOwner();
+  if (denied) return denied;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

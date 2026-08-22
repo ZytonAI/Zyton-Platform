@@ -1,4 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth/session";
+import { canManageBilling } from "@/lib/permissions";
+import { TEAM_MEMBERS } from "@/lib/team";
 import { TopBar } from "@/components/layout/TopBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -103,17 +106,20 @@ function MiniBars({
 }
 
 export default async function DashboardPage() {
+  const { user, role } = await getSession();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+
+  // Los Socios Estratégicos no ven cobros: se les omiten las tarjetas, el
+  // gráfico de ingresos y los accesos a Facturas (ver src/lib/permissions.ts).
+  const showBilling = canManageBilling(role);
 
   const { now, eightWeeksAgo, sixMonthsAgoStr, in30days, todayStr, startOfTodayIso } = getDateRanges();
 
   const [
     leadsRes, clientsRes, messagesRes, convertedRes,
     upcomingInvoicesRes, upcomingEventsRes,
-    recentLeadsRes, invoicesHistoryRes, expiringContractsRes, overdueRes,
+    recentLeadsRes, leadTagsRes, clientTagsRes,
+    invoicesHistoryRes, expiringContractsRes, overdueRes,
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -147,6 +153,9 @@ export default async function DashboardPage() {
       .select("created_at")
       .gte("created_at", eightWeeksAgo)
       .limit(2000),
+    // Etiquetas de equipo, para el corte por persona
+    supabase.from("leads").select("status, contacted_by, closed_by").limit(5000),
+    supabase.from("clients").select("status, closed_by").limit(2000),
     supabase
       .from("invoices")
       .select("amount, status, due_date, type")
@@ -191,6 +200,30 @@ export default async function DashboardPage() {
     .filter((i) => i.type === "receivable" && i.status !== "paid" && i.due_date.startsWith(thisMonthKey))
     .reduce((a, i) => a + Number(i.amount), 0);
 
+  // ── Cómo va cada quien ──
+  // Si la migración 018 no está aplicada las columnas no existen y la query
+  // falla; en ese caso se omite el bloque en vez de romper el dashboard.
+  type LeadTag = { status: string; contacted_by: string | null; closed_by: string | null };
+  type ClientTag = { status: string; closed_by: string | null };
+  const leadTags = (leadTagsRes.error ? [] : (leadTagsRes.data ?? [])) as LeadTag[];
+  const clientTags = (clientTagsRes.error ? [] : (clientTagsRes.data ?? [])) as ClientTag[];
+
+  const perMember = TEAM_MEMBERS.map((member) => {
+    const contacted = leadTags.filter((l) => l.contacted_by === member.slug);
+    const won = leadTags.filter((l) => l.closed_by === member.slug && l.status === "converted");
+    const activeClients = clientTags.filter(
+      (c) => c.closed_by === member.slug && c.status === "active"
+    );
+    return {
+      member,
+      contacted: contacted.length,
+      won: won.length,
+      clients: activeClients.length,
+      rate: contacted.length > 0 ? Math.round((won.length / contacted.length) * 100) : 0,
+    };
+  });
+  const hasTeamData = perMember.some((m) => m.contacted > 0 || m.won > 0 || m.clients > 0);
+
   const stats = [
     {
       title: "Leads totales",
@@ -224,17 +257,20 @@ export default async function DashboardPage() {
       color: "text-amber-600 dark:text-amber-400",
       bg: "bg-amber-50 dark:bg-amber-500/15",
     },
-    {
-      title: "Ingresos del mes",
-      value: formatAmount(incomeThisMonth),
-      description: incomePendingThisMonth > 0 ? `${formatAmount(incomePendingThisMonth)} por cobrar` : "Todo cobrado",
-      icon: DollarSign,
-      color: "text-sky-600 dark:text-sky-400",
-      bg: "bg-sky-50 dark:bg-sky-500/15",
-    },
+    // El dinero es solo del Dueño
+    ...(showBilling
+      ? [{
+          title: "Ingresos del mes",
+          value: formatAmount(incomeThisMonth),
+          description: incomePendingThisMonth > 0 ? `${formatAmount(incomePendingThisMonth)} por cobrar` : "Todo cobrado",
+          icon: DollarSign,
+          color: "text-sky-600 dark:text-sky-400",
+          bg: "bg-sky-50 dark:bg-sky-500/15",
+        }]
+      : []),
   ];
 
-  const needsAttention = overdueCount > 0 || expiringContracts.length > 0;
+  const needsAttention = (showBilling && overdueCount > 0) || expiringContracts.length > 0;
 
   return (
     <>
@@ -254,9 +290,11 @@ export default async function DashboardPage() {
             <Button render={<Link href="/leads" />} size="sm" variant="outline" className="gap-1.5 rounded-xl">
               <Plus className="w-4 h-4" /> Nuevo lead
             </Button>
-            <Button render={<Link href="/invoices" />} size="sm" variant="outline" className="gap-1.5 rounded-xl">
-              <Receipt className="w-4 h-4" /> Facturas
-            </Button>
+            {showBilling && (
+              <Button render={<Link href="/invoices" />} size="sm" variant="outline" className="gap-1.5 rounded-xl">
+                <Receipt className="w-4 h-4" /> Facturas
+              </Button>
+            )}
             <Button render={<Link href="/chat" />} size="sm" className="gap-1.5 rounded-xl">
               <MessageCircle className="w-4 h-4" /> Ir al chat
             </Button>
@@ -270,7 +308,7 @@ export default async function DashboardPage() {
               <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-semibold text-sm">
                 <AlertTriangle className="w-4 h-4" /> Requiere atención
               </div>
-              {overdueCount > 0 && (
+              {showBilling && overdueCount > 0 && (
                 <Link href="/invoices" className="text-sm text-foreground hover:underline">
                   {overdueCount} factura{overdueCount !== 1 ? "s" : ""} vencida{overdueCount !== 1 ? "s" : ""} sin pagar
                 </Link>
@@ -285,7 +323,7 @@ export default async function DashboardPage() {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${showBilling ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
           {stats.map((stat) => (
             <Card key={stat.title} className="border-0 shadow-sm">
               <CardHeader className="pb-2">
@@ -308,8 +346,54 @@ export default async function DashboardPage() {
           ))}
         </div>
 
+        {/* ── Cómo va cada quien ── */}
+        {hasTeamData && (
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Cómo va cada quien
+                </CardTitle>
+                <Users className="w-4 h-4 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {perMember.map(({ member, contacted, won, clients, rate }) => (
+                  <div
+                    key={member.slug}
+                    className="rounded-xl p-3.5 ring-1 ring-black/[0.05] dark:ring-white/[0.08]"
+                  >
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className={`w-2 h-2 rounded-full ${member.dot}`} />
+                      <span className="text-sm font-semibold">{member.name}</span>
+                      <span className="ml-auto text-xs font-bold tabular-nums text-muted-foreground">
+                        {rate}%
+                      </span>
+                    </div>
+                    <dl className="space-y-1 text-xs text-muted-foreground">
+                      <div className="flex justify-between gap-2">
+                        <dt>Contactados</dt>
+                        <dd className="font-semibold text-foreground tabular-nums">{contacted}</dd>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <dt>Cerrados</dt>
+                        <dd className="font-semibold text-foreground tabular-nums">{won}</dd>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <dt>Clientes activos</dt>
+                        <dd className="font-semibold text-foreground tabular-nums">{clients}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* ── Mini gráficos ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 gap-4 ${showBilling ? "lg:grid-cols-2" : ""}`}>
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -324,78 +408,82 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Ingresos vs gastos por mes
-                </CardTitle>
-                <DollarSign className="w-4 h-4 text-sky-500" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <MiniBars data={monthBuckets} accentClass="bg-sky-500" secondaryClass="bg-orange-400/70" />
-              <div className="flex items-center gap-4 mt-2">
-                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Ingresos (cobrado)
-                </span>
-                <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-orange-400/70 inline-block" /> Gastos (pagado)
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+          {showBilling && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Ingresos vs gastos por mes
+                  </CardTitle>
+                  <DollarSign className="w-4 h-4 text-sky-500" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <MiniBars data={monthBuckets} accentClass="bg-sky-500" secondaryClass="bg-orange-400/70" />
+                <div className="flex items-center gap-4 mt-2">
+                  <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Ingresos (cobrado)
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-orange-400/70 inline-block" /> Gastos (pagado)
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Próximas facturas
-                </CardTitle>
-                <Receipt className="w-4 h-4 text-orange-500" />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {upcomingInvoices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin facturas pendientes</p>
-              ) : (
-                upcomingInvoices.map((inv) => (
-                  <div key={inv.id} className="flex items-center justify-between text-sm">
-                    <span className="truncate font-medium max-w-[40%]">{inv.title}</span>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          inv.type === "receivable"
-                            ? "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"
-                            : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
-                        }`}
-                      >
-                        {inv.type === "receivable" ? "Cobro" : "Pago"}
-                      </span>
-                      <span className="font-mono text-xs tabular-nums">{formatAmount(Number(inv.amount))}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {new Date(inv.due_date + "T00:00:00").toLocaleDateString("es-ES", {
-                          day: "2-digit",
-                          month: "short",
-                        })}
-                      </span>
-                      <span
-                        className={`text-xs font-medium ${
-                          inv.status === "overdue" || inv.due_date < todayStr
-                            ? "text-red-600 dark:text-red-400"
-                            : "text-amber-600 dark:text-amber-400"
-                        }`}
-                      >
-                        {inv.status === "overdue" || inv.due_date < todayStr ? "Vencida" : "Pendiente"}
-                      </span>
+        <div className={`grid grid-cols-1 gap-4 ${showBilling ? "lg:grid-cols-2" : ""}`}>
+          {showBilling && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Próximas facturas
+                  </CardTitle>
+                  <Receipt className="w-4 h-4 text-orange-500" />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {upcomingInvoices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin facturas pendientes</p>
+                ) : (
+                  upcomingInvoices.map((inv) => (
+                    <div key={inv.id} className="flex items-center justify-between text-sm">
+                      <span className="truncate font-medium max-w-[40%]">{inv.title}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            inv.type === "receivable"
+                              ? "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"
+                              : "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300"
+                          }`}
+                        >
+                          {inv.type === "receivable" ? "Cobro" : "Pago"}
+                        </span>
+                        <span className="font-mono text-xs tabular-nums">{formatAmount(Number(inv.amount))}</span>
+                        <span className="text-muted-foreground text-xs">
+                          {new Date(inv.due_date + "T00:00:00").toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "short",
+                          })}
+                        </span>
+                        <span
+                          className={`text-xs font-medium ${
+                            inv.status === "overdue" || inv.due_date < todayStr
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
+                          {inv.status === "overdue" || inv.due_date < todayStr ? "Vencida" : "Pendiente"}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">

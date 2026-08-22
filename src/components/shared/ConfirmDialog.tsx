@@ -12,9 +12,16 @@ interface Props {
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
+  /** Texto del botón rojo — por defecto "Eliminar" */
+  confirmLabel?: string;
+  /** Texto mientras se ejecuta — por defecto "Eliminando..." */
+  loadingLabel?: string;
 }
 
-export function ConfirmDialog({ open, title, description, onConfirm, onCancel, loading }: Props) {
+export function ConfirmDialog({
+  open, title, description, onConfirm, onCancel, loading,
+  confirmLabel = "Eliminar", loadingLabel = "Eliminando...",
+}: Props) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
       <DialogContent className="max-w-sm">
@@ -25,7 +32,7 @@ export function ConfirmDialog({ open, title, description, onConfirm, onCancel, l
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onCancel} disabled={loading}>Cancelar</Button>
           <Button variant="destructive" onClick={onConfirm} disabled={loading}>
-            {loading ? "Eliminando..." : "Eliminar"}
+            {loading ? loadingLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

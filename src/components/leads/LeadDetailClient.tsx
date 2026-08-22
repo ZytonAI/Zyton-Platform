@@ -13,6 +13,8 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { ArrowLeft, Pencil, Trash2, Star } from "lucide-react";
 import { toast } from "sonner";
 import type { Lead, HistoryEvent, FileAttachment } from "@/types";
+import { MemberBadges } from "@/components/shared/MemberTag";
+import { useMemberById } from "@/components/layout/SessionContext";
 
 interface Props {
   lead: Lead;
@@ -32,6 +34,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
 export function LeadDetailClient({ lead: initialLead, history: initialHistory, attachments: initialAttachments }: Props) {
   const router = useRouter();
   const [lead, setLead] = useState(initialLead);
+  const creator = useMemberById(lead.owner_id);
   const [history, setHistory] = useState(initialHistory);
   const [attachments, setAttachments] = useState(initialAttachments);
   const [showEdit, setShowEdit] = useState(false);
@@ -100,6 +103,24 @@ export function LeadDetailClient({ lead: initialLead, history: initialHistory, a
               <Field label="Teléfono" value={lead.phone} />
               <Field label="Empresa" value={lead.company} />
               <Field label="Fuente" value={lead.source} />
+              <div className="col-span-2">
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  Equipo
+                  {creator && (
+                    <span className="ml-2 font-normal">· creado por {creator.name}</span>
+                  )}
+                </p>
+                <MemberBadges
+                  tags={[
+                    { label: "Contactó", slug: lead.contacted_by },
+                    { label: "Cerró", slug: lead.closed_by },
+                    { label: "Programa", slug: lead.scheduled_by },
+                  ]}
+                />
+                {!lead.contacted_by && !lead.closed_by && !lead.scheduled_by && (
+                  <p className="text-sm text-muted-foreground">Sin asignar</p>
+                )}
+              </div>
               {lead.notes && (
                 <div className="col-span-2">
                   <p className="text-xs text-muted-foreground">Notas</p>

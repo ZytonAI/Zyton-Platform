@@ -6,6 +6,10 @@ export const calendarEventSchema = z.object({
   type:        z.enum(["event", "task", "deadline"]),
   description: z.string().optional().or(z.literal("")),
   status:      z.enum(["pending", "done"]),
+  // personal = solo lo ve quien lo crea; team = todo el equipo.
+  // Opcional: si no viene, manda el DEFAULT 'team' de la tabla (así los
+  // eventos que agenda LeadsClient siguen siendo del equipo sin tocar nada).
+  visibility:  z.enum(["team", "personal"]).optional(),
   lead_id:     z.string().uuid().optional().nullable(),
 });
 

@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { TEAM_SLUGS } from "@/lib/team";
+
+/** Etiqueta de persona: slug del equipo, o null si nadie la tiene asignada */
+const memberTag = z.enum(TEAM_SLUGS).nullable().optional();
 
 export const BILLING_TYPES = [
   { value: "monthly",  label: "Mensual" },
@@ -21,6 +25,9 @@ const clientObjectSchema = z.object({
   // tipo "cobro" ligada a este cliente.
   billing_type: z.enum(["monthly", "one_time"]).nullable().optional(),
   billing_amount: z.number().positive("El monto debe ser mayor a 0").nullable().optional(),
+  // Etiquetas de equipo — quién cerró y quién programa
+  closed_by: memberTag,
+  scheduled_by: memberTag,
 });
 
 const requiresAmountWhenBilling = (d: { billing_type?: string | null; billing_amount?: number | null }) =>

@@ -6,19 +6,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Zyton Platform** — Hub centralizado de gestión empresarial para ZytonAI. Incluye gestión de leads, clientes, chat integrado con WhatsApp, y agentes de IA (futuro).
 
-**Equipo (4 personas)**: Samuel, Camilo, Santiago y Daniel. Es un workspace **compartido**: los cuatro ven y editan los mismos leads, clientes, facturas, calendario, wiki y chat. `owner_id` sigue en las tablas como autoría (quién creó el registro), pero ya no restringe visibilidad. Lo único personal es el historial de Diana (`diana_messages`, `diana_tasks`, `diana_action_log`).
+**Equipo (4 personas)**: Samuel, Camilo, Santiago y Daniel. Es un workspace **compartido**: los cuatro ven y editan los mismos leads, clientes, calendario, wiki, chat y tareas. `owner_id` sigue en las tablas como autoría (quién creó el registro), pero ya no restringe visibilidad. Lo único personal es el historial de Diana (`diana_messages`, `diana_tasks`, `diana_action_log`).
+
+**Etiquetas de equipo**: leads y clientes llevan el slug de quién los trabaja — `leads.contacted_by / closed_by / scheduled_by` y `clients.closed_by / scheduled_by` (migración 018). De ahí sale el filtro del chat: una conversación es de quien contactó su lead (o cerró su cliente); las que no tienen dueño las ven los cuatro. Abrir el chat de un lead sin etiqueta lo marca automáticamente como contactado por quien lo abrió.
+
+**Calendario y Wiki**: cada evento y cada página es `team` (lo ve el equipo, default) o `personal` (solo quien lo creó, garantizado por RLS). Migraciones 018 y 019.
+
+**Quién hizo qué**: `owner_id` (creador) se traduce a persona con `src/lib/directory.ts` y se pinta en el historial, los adjuntos, los mensajes de WhatsApp salientes, la Wiki y las fichas. El contexto de sesión (`SessionContext`) lleva rol, slug propio y ese directorio.
+
+**Avisos**: asignar una tarea o etiquetar un lead a alguien le manda un Telegram (`src/lib/notify-member.ts`); nunca a uno mismo. Raúl manda un solo aviso por lote.
+
+**Ediciones simultáneas**: los formularios de lead y cliente mandan el `updated_at` con el que abrieron la ficha; si en la base hay uno más nuevo, la API responde 409 en vez de pisar el cambio ajeno (`src/lib/concurrency.ts`).
+
+**Solo el Dueño** puede cerrar la sesión de WhatsApp: el número lo comparten los cuatro.
+
+**Roles**: hay dos, definidos en `src/lib/permissions.ts`.
+
+| Rol | Quién | Qué ve |
+|---|---|---|
+| `owner` — Dueño | Samuel | Todo |
+| `partner` — Socio Estratégico | Camilo, Santiago, Daniel | Todo menos los cobros |
+
+Para un Socio Estratégico se oculta: el ítem **Facturas** del sidebar y la ruta `/invoices` (redirige a `/dashboard`), la API `/api/invoices/*` (403), las tarjetas y gráficos de dinero del Dashboard, el bloque "Cobro al cliente" y las facturas en la ficha de cliente, y la tool `get_invoices` de Diana.
+
+Se aplica en tres capas: UI (`RoleProvider` / `useIsOwner`), servidor (`src/lib/auth/session.ts` → `getSession`, `denyIfNotOwner`) y base (`profiles.role` + `is_owner()` + RLS de `invoices`, migración `017_roles.sql`). El rol de la app se deriva del email con `src/lib/team.ts`; quien no esté en esa lista entra como `partner`.
+
+Excepción conocida: `clients.billing_type` / `billing_amount` viven en la tabla compartida `clients` y RLS filtra filas, no columnas. La app las anula antes de mandarlas al navegador (`hideBilling` en `src/lib/client-billing.ts`), pero un Socio Estratégico que consultara Supabase directo con la anon key aún las vería. Cerrarlo del todo pide una vista sin esas columnas.
 
 **Login por usuario, no por email**: se entra con `SamuelZY`, `CamiloZY`, `SantiagoZY`, `DanielZY`. Supabase Auth guarda un email por debajo; `POST /api/auth/login` traduce usuario → email (vía `profiles.username`, con service role) y firma en el servidor.
 
-La lista del equipo vive en `src/lib/team.ts` (fuente única). Al cambiarla, actualizar también el `CHECK (assignee IN ...)` de `014_tasks.sql`, los usuarios de `015_usernames.sql` y la lista `TEAM` de `scripts/create-users.mjs`.
+La lista del equipo vive en `src/lib/team.ts` (fuente única: usuario, email, color y **rol**). Al cambiarla, actualizar también el `CHECK (assignee IN ...)` de `014_tasks.sql`, los usuarios de `015_usernames.sql`, los roles de `017_roles.sql` y la lista `TEAM` de `scripts/create-users.mjs`.
 
 ## Stack
 
 - **Framework**: Next.js 16 (App Router) + TypeScript
 - **Estilos**: Tailwind CSS v4 + shadcn/ui
 - **Base de datos + Auth**: Supabase (PostgreSQL + RLS + Storage)
-- **WhatsApp**: whatsapp-web.js en servicio Node.js separado (Stage 3)
-- **Hosting**: Vercel (frontend) + Railway/VPS (WA service)
+- **WhatsApp**: whatsapp-web.js en servicio Node.js separado (`whatsapp-service/`)
+- **Hosting**: EasyPanel con Docker — el `Dockerfile` de la raíz para el CRM y otro app para el WA service
 
 ## Setup
 
@@ -41,6 +66,10 @@ npm run build    # Build de producción
 npm run start    # Servidor de producción local
 npm run lint     # ESLint
 ```
+
+**Deploy**: EasyPanel construye el `Dockerfile` de la raíz (multi-stage, `output: "standalone"` en `next.config.ts`). Las `NEXT_PUBLIC_*` se incrustan en el bundle durante el build → van como **build args**, no como variables de runtime. Detalle en el [README](README.md).
+
+**Cron**: `/api/diana/invoice-reminder` lo dispara la propia app. `src/instrumentation.ts` corre una vez al arrancar el servidor y programa la tarea diaria en `src/lib/cron.ts` (default 14:00 UTC = 9:00 a.m. Colombia). Necesita `CRON_SECRET`; se ajusta con `INVOICE_REMINDER_AT` y se apaga con `DISABLE_CRON=1`. Ver README.
 
 ## Variables de entorno requeridas
 
@@ -67,22 +96,36 @@ src/
       auth/callback/      # Callback de Supabase Auth
       tasks/              # CRUD del To Do
       auth/login/         # Login por usuario → email + sesión
-      leads/              # CRUD (Stage 2)
-      clients/            # CRUD (Stage 2)
-      attachments/        # Upload a Supabase Storage (Stage 2)
-      whatsapp/           # Proxy al WA service (Stage 3)
+      invoices/           # CRUD de facturas — solo el Dueño (403 al resto)
+      leads/              # CRUD
+      clients/            # CRUD
+      attachments/        # Upload a Supabase Storage
+      diana/              # Chat de Diana, Telegram y cron de facturas
+      agents/             # Raúl, Elisa y Davoo
+      whatsapp/           # Proxy al WA service
   components/
-    layout/Sidebar.tsx    # Navegación principal
+    layout/Sidebar.tsx    # Navegación principal (filtrada por rol)
+    layout/SessionContext.tsx # useRole / useIsOwner / useMySlug / useMemberById
+    shared/MemberTag.tsx  # Desplegable y badges de los miembros del equipo
     layout/TopBar.tsx     # Header con usuario
     ui/                   # Componentes shadcn/ui
   lib/
-    team.ts               # Los 4 miembros (usuario, nombre, email, color)
+    team.ts               # Los 4 miembros (usuario, nombre, email, color, rol)
+    permissions.ts        # Roles owner/partner y qué puede ver cada uno
+    auth/session.ts       # getSession / denyIfNotOwner para páginas y API
+    cron.ts               # Tarea diaria de facturas (reemplaza al cron de Vercel)
+    conversation-scope.ts # Qué chats de WhatsApp le tocan a cada persona
+    directory.ts          # owner_id → miembro del equipo
+    concurrency.ts        # 409 si dos personas editan el mismo registro
+    notify-member.ts      # Avisos de "te asignaron esto" por Telegram
+    pg-compat.ts          # Reintenta sin la columna si falta la migración
     wa-session.ts         # Sesión de WhatsApp del workspace (una sola)
     supabase/client.ts    # Browser client (anon key)
     supabase/server.ts    # Server client (cookies)
-  middleware.ts           # Redirige no-autenticados a /login
+  proxy.ts                # Middleware de Next 16 — redirige no-autenticados a /login
+  instrumentation.ts      # Arranca el cron interno al levantar el servidor
 
-whatsapp-service/         # Servicio Node.js separado (Stage 3)
+whatsapp-service/         # Servicio Node.js separado (tiene su propio repo, ver abajo)
 scripts/create-users.mjs  # Alta de las cuentas del equipo en Supabase Auth
 supabase/migrations/      # SQL con schema y políticas RLS
 ```
@@ -91,27 +134,28 @@ supabase/migrations/      # SQL con schema y políticas RLS
 
 1. Crear proyecto en supabase.com
 2. Copiar URL y anon key a `.env.local`
-3. Ir a SQL Editor y ejecutar las migraciones de `supabase/migrations/` en orden numérico
+3. Ir a SQL Editor y ejecutar las migraciones de `supabase/migrations/` en orden numérico (hay números repetidos — 008, 009, 010, 013, 014, 015 — porque salieron de ramas paralelas; dentro del mismo número el orden da igual)
+
+   La migración va **antes** del deploy. Si se despliega primero, `src/lib/pg-compat.ts` evita que reviente: guarda el registro sin las columnas nuevas y deja un aviso `[pg-compat]` en los logs — pero el dato nuevo de ese guardado se pierde.
 4. Crear bucket privado llamado `attachments` en Storage
 5. Agregar políticas de storage (ver comentarios al final del SQL)
 
-## Etapas de desarrollo
+## Estado
 
-| Stage | Contenido | Estado |
-|---|---|---|
-| 1 | Fundación, Auth, Sidebar | Completado |
-| 2 | CRM: Leads y Clientes | Pendiente |
-| 3 | Chat / WhatsApp integrado | Pendiente |
-| 4 | Agentes IA + Polish | Pendiente |
+Todo lo planeado está en producción: auth y roles, CRM de leads y clientes, facturas, calendario, wiki, tablero To Do, chat de WhatsApp y los agentes (Raúl, Elisa, Davoo) más Diana.
+
+## whatsapp-service — ojo
+
+La carpeta `whatsapp-service/` está versionada en **dos repos a la vez**: en este, y en su propio repo (`ZytonAI/whatsapp-service-`, que es el que EasyPanel despliega). Las dos copias ya divergieron. Antes de tocar el WA service, confirmar en cuál de los dos se está trabajando.
 
 ## Usuarios del equipo
 
-| Persona | Usuario | Email (interno, no se escribe al entrar) |
-|---|---|---|
-| Samuel | `SamuelZY` | zyton.automation@gmail.com |
-| Camilo | `CamiloZY` | camilo@zytonai.com |
-| Santiago | `SantiagoZY` | santiago@zytonai.com |
-| Daniel | `DanielZY` | daniel@zytonai.com |
+| Persona | Usuario | Rol | Email (interno, no se escribe al entrar) |
+|---|---|---|---|
+| Samuel | `SamuelZY` | Dueño | zyton.automation@gmail.com |
+| Camilo | `CamiloZY` | Socio Estratégico | camilo@zytonai.com |
+| Santiago | `SantiagoZY` | Socio Estratégico | santiago@zytonai.com |
+| Daniel | `DanielZY` | Socio Estratégico | daniel@zytonai.com |
 
 Las cuentas se crean con el service role, nunca desde el navegador:
 
@@ -119,6 +163,14 @@ Las cuentas se crean con el service role, nunca desde el navegador:
 node scripts/create-users.mjs                        # crea las que falten
 node scripts/create-users.mjs --reset                # resetea todas las contraseñas
 node scripts/create-users.mjs --reset --only=samuel  # solo una persona
+```
+
+Borrar el historial de WhatsApp (mensajes, conversaciones y media del bucket
+`wa-media`; no toca el bucket `attachments` ni el resto del CRM):
+
+```bash
+node scripts/wipe-whatsapp.mjs         # dry run: solo cuenta
+node scripts/wipe-whatsapp.mjs --yes   # borra de verdad
 ```
 
 Imprime las contraseñas una sola vez — hay que compartirlas y pedir que las cambien.

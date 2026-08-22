@@ -1,9 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type OpenAI from "openai";
+import { canManageBilling, type Role } from "@/lib/permissions";
 
 // ── Tool definitions for OpenAI function calling ──────────────────────────────
 
-export const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
+/** Tools que tocan dinero: solo el Dueño (ver src/lib/permissions.ts). */
+const BILLING_TOOLS = new Set(["get_invoices"]);
+
+const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
@@ -225,13 +229,31 @@ export const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
 
 // ── Tool handlers ─────────────────────────────────────────────────────────────
 
+/**
+ * Diana corre con el service client (se salta RLS), así que el rol se filtra
+ * aquí: a un Socio Estratégico ni se le ofrecen las tools de cobros.
+ */
+export function toolsForRole(role: Role): OpenAI.Chat.ChatCompletionTool[] {
+  if (canManageBilling(role)) return DIANA_TOOLS;
+  return DIANA_TOOLS.filter(
+    (t) => t.type !== "function" || !BILLING_TOOLS.has(t.function.name)
+  );
+}
+
 export async function runTool(
   name: string,
   args: Record<string, unknown>,
   supabase: SupabaseClient,
   ownerId: string,
-  baseUrl: string
+  baseUrl: string,
+  role: Role = "partner"
 ): Promise<string> {
+  // Cinturón y tirantes: aunque la tool no se le haya ofrecido, si el modelo
+  // la inventa no se ejecuta.
+  if (BILLING_TOOLS.has(name) && !canManageBilling(role)) {
+    return "Sin acceso: los cobros son solo del Dueño.";
+  }
+
   try {
     switch (name) {
       case "get_leads": {
@@ -291,16 +313,29 @@ export async function runTool(
         let data: Record<string, unknown>[] | null = null;
         let error: { message: string } | null = null;
 
+        // Diana corre con service role (se salta RLS), así que el filtro de
+        // eventos personales va aquí: los de otros no se le muestran.
         const baseQuery = () =>
           supabase
             .from("calendar_events")
             .select("id,title,event_date,type,description,status")
             .gte("event_date", now.toISOString())
+            .or(`visibility.eq.team,owner_id.eq.${ownerId}`)
             .order("event_date", { ascending: true })
             .limit(limit);
 
         const res1 = await baseQuery().is("deleted_at", null);
-        if (res1.error?.message?.includes("deleted_at")) {
+        if (res1.error?.message?.includes("visibility")) {
+          // Migración 018 sin aplicar — todos los eventos eran del equipo
+          const res0 = await supabase
+            .from("calendar_events")
+            .select("id,title,event_date,type,description,status")
+            .gte("event_date", now.toISOString())
+            .order("event_date", { ascending: true })
+            .limit(limit);
+          data = res0.data as Record<string, unknown>[] | null;
+          error = res0.error;
+        } else if (res1.error?.message?.includes("deleted_at")) {
           // Columna no en schema cache aún — fallback sin filtro
           const res2 = await baseQuery();
           data = res2.data as Record<string, unknown>[] | null;

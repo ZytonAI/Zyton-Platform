@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-interface BillingInput {
+export interface BillingInput {
   billing_type?: "monthly" | "one_time" | null;
   billing_amount?: number | null;
 }
@@ -54,4 +54,28 @@ export async function syncBillingInvoice(
     .single();
 
   return invoice?.id ?? null;
+}
+
+/**
+ * Quita los campos de cobro de un payload de cliente. Se usa cuando quien
+ * guarda es Socio Estratégico: no puede ver ni configurar cobros, así que su
+ * request nunca debe tocar billing_type/billing_amount (ni siquiera para
+ * borrarlos si mandara el body a mano).
+ */
+export function stripBillingFields<T extends BillingInput>(data: T): T {
+  // Las claves salen del objeto, así que `"billing_type" in input` da false y
+  // quien lo reciba no sincroniza ninguna factura.
+  const rest: BillingInput = { ...data };
+  delete rest.billing_type;
+  delete rest.billing_amount;
+  return rest as T;
+}
+
+/**
+ * Deja en null el cobro de un cliente antes de mandarlo al navegador de un
+ * Socio Estratégico. La fila sí trae los campos desde Postgres (RLS es por
+ * fila, no por columna), así que se limpian aquí.
+ */
+export function hideBilling<T extends Record<string, unknown>>(client: T): T {
+  return { ...client, billing_type: null, billing_amount: null, billing_invoice_id: null };
 }

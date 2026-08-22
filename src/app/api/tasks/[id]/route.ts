@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth/session";
+import { notifyAssignment } from "@/lib/notify-member";
 import { taskSchema } from "@/lib/validations/task.schema";
 import { NextResponse } from "next/server";
 
@@ -8,7 +10,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, member } = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
@@ -24,6 +26,9 @@ export async function PATCH(
   if ("due_date" in parsed.data)    update.due_date = parsed.data.due_date || null;
   if ("description" in parsed.data) update.description = parsed.data.description || null;
 
+  // Para saber si la tarea cambió de manos
+  const previous = await supabase.from("tasks").select("assignee").eq("id", id).maybeSingle();
+
   const { data, error } = await supabase
     .from("tasks")
     .update(update)
@@ -32,6 +37,17 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (parsed.data.assignee && parsed.data.assignee !== previous.data?.assignee) {
+    await notifyAssignment(
+      data.assignee,
+      member?.slug,
+      `📋 *Te pasaron una tarea*\n\n${data.title}` +
+        (data.due_date ? `\nPara el ${data.due_date}` : "") +
+        (member ? `\nTe la asignó ${member.name}` : "")
+    );
+  }
+
   return NextResponse.json(data);
 }
 

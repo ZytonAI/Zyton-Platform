@@ -18,6 +18,8 @@ import {
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "./SidebarContext";
+import { useRole } from "./SessionContext";
+import { canAccessPath } from "@/lib/permissions";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 const navItems = [
@@ -35,6 +37,10 @@ const navItems = [
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const role = useRole();
+
+  // Los Socios Estratégicos no ven Facturas (cobros) — ver src/lib/permissions.ts
+  const visibleItems = navItems.filter((item) => canAccessPath(role, item.href));
 
   async function handleLogout() {
     const supabase = createClient();
@@ -60,7 +66,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {visibleItems.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link

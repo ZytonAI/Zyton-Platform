@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { withColumnFallback } from "@/lib/pg-compat";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -8,6 +9,7 @@ const updatePageSchema = z.object({
   icon: z.string().max(16).nullable().optional(),
   parent_id: z.string().uuid().nullable().optional(),
   position: z.number().int().optional(),
+  visibility: z.enum(["team", "personal"]).optional(),
 });
 
 export async function PATCH(
@@ -30,13 +32,12 @@ export async function PATCH(
   if (body.icon      !== undefined) allowed.icon      = body.icon;
   if (body.parent_id !== undefined) allowed.parent_id = body.parent_id;
   if (body.position  !== undefined) allowed.position  = body.position;
+  if (body.visibility !== undefined) allowed.visibility = body.visibility;
 
-  const { data, error } = await supabase
-    .from("workspace_pages")
-    .update({ ...allowed, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
+  const { data, error } = await withColumnFallback(
+    { ...allowed, updated_by: user.id, updated_at: new Date().toISOString() },
+    (row) => supabase.from("workspace_pages").update(row).eq("id", id).select().single()
+  );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);

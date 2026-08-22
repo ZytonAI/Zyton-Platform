@@ -1,12 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type OpenAI from "openai";
 import { getOpenAI } from "@/lib/openai-client";
-import { DIANA_TOOLS, runTool } from "@/lib/diana-tools";
+import { runTool, toolsForRole } from "@/lib/diana-tools";
+import { canManageBilling, DEFAULT_ROLE, type Role } from "@/lib/permissions";
 
 const MODEL = "gpt-4o-mini-2024-07-18";
 const HISTORY_LIMIT = 20;
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(role: Role): string {
   const now = new Date().toLocaleString("es-CO", {
     weekday: "long", year: "numeric", month: "long",
     day: "numeric", hour: "2-digit", minute: "2-digit",
@@ -33,7 +34,9 @@ Es el sistema de gestión interno de ZytonAI. Todo el negocio pasa por aquí:
 
 **Calendario**: Eventos, tareas y deadlines. IMPORTANTE: cuando un evento tiene lead_id vinculado, aparece el botón "Contactar" en la vista de lista del calendario. Sin lead_id ese botón no existe.
 
-**Facturas**: Gastos del negocio (hosting, software, etc.). Pueden ser recurrentes.
+${canManageBilling(role)
+  ? "**Facturas**: Gastos del negocio (hosting, software, etc.) y cobros a clientes. Pueden ser recurrentes."
+  : "**Facturas**: existen en la plataforma pero son solo del Dueño. Con esta persona NO hables de facturas, cobros, montos ni ingresos: no tienes tool para consultarlos. Si te preguntan, di que esa parte la lleva el Dueño."}
 
 **Wiki**: Notas y documentos internos de ZytonAI.
 
@@ -87,7 +90,8 @@ export async function processDianaMessage(
   channel: "web" | "telegram",
   supabase: SupabaseClient,
   baseUrl: string,
-  imageUrl?: string
+  imageUrl?: string,
+  role: Role = DEFAULT_ROLE
 ): Promise<string> {
   // 1. Cargar historial reciente
   const { data: history } = await supabase
@@ -123,7 +127,7 @@ export async function processDianaMessage(
   }
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: "system", content: buildSystemPrompt() },
+    { role: "system", content: buildSystemPrompt(role) },
     ...pastMessages.map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
@@ -142,7 +146,7 @@ export async function processDianaMessage(
     const response = await openai.chat.completions.create({
       model: MODEL,
       messages,
-      tools: DIANA_TOOLS,
+      tools: toolsForRole(role),
       tool_choice: "auto",
       temperature: 0.3,
     });
@@ -163,7 +167,7 @@ export async function processDianaMessage(
           args = {};
         }
 
-        const result = await runTool(tc.function.name, args, supabase, ownerId, baseUrl);
+        const result = await runTool(tc.function.name, args, supabase, ownerId, baseUrl, role);
 
         messages.push({
           role: "tool",

@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import type { Lead } from "@/types";
+import { MemberSelect } from "@/components/shared/MemberTag";
 
 interface Props {
   open: boolean;
@@ -44,6 +45,9 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
       website: initialData?.website ?? "",
       maps_url: initialData?.maps_url ?? "",
       notes: initialData?.notes ?? "",
+      contacted_by: initialData?.contacted_by ?? null,
+      closed_by: initialData?.closed_by ?? null,
+      scheduled_by: initialData?.scheduled_by ?? null,
     },
   });
 
@@ -62,22 +66,33 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
       website: initialData?.website ?? "",
       maps_url: initialData?.maps_url ?? "",
       notes: initialData?.notes ?? "",
+      contacted_by: initialData?.contacted_by ?? null,
+      closed_by: initialData?.closed_by ?? null,
+      scheduled_by: initialData?.scheduled_by ?? null,
     });
     setDuplicate(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData]);
 
   const status = watch("status");
+  const contactedBy = watch("contacted_by");
+  const closedBy = watch("closed_by");
+  const scheduledBy = watch("scheduled_by");
   const priority = watch("priority");
 
   async function submit(data: LeadFormData, force: boolean) {
     const url = isEdit ? `/api/leads/${initialData.id}` : "/api/leads";
     const method = isEdit ? "PATCH" : "POST";
 
+    // El updated_at con el que se abrió la ficha: si en la base hay uno más
+    // nuevo, alguien del equipo guardó primero y la API responde 409.
+    const payload: Record<string, unknown> = { ...data };
+    if (isEdit) payload.expected_updated_at = initialData.updated_at;
+
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(force ? { ...data, force: true } : data),
+      body: JSON.stringify(force ? { ...payload, force: true } : payload),
     });
 
     if (res.ok) {
@@ -91,6 +106,11 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
 
     if (res.status === 409) {
       const err = await res.json().catch(() => ({}));
+      // Dos cosas responden 409: un duplicado, o que alguien más guardó antes
+      if (err.conflict) {
+        toast.error(err.error ?? "Otra persona guardó cambios en este registro.");
+        return;
+      }
       setDuplicate(err.duplicate_of ?? { type: "lead", id: "", name: "otro registro" });
       return;
     }
@@ -176,6 +196,39 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
                 </SelectContent>
               </Select>
             </div>
+            {/* Etiquetas de equipo — quién hizo qué con este lead */}
+            <div className="col-span-2 rounded-lg border p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Equipo</p>
+                <p className="text-xs text-muted-foreground">
+                  Quién trabaja este lead. También decide quién lo ve en el chat de WhatsApp.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label>Contactado por</Label>
+                  <MemberSelect
+                    value={contactedBy}
+                    onChange={(v) => setValue("contacted_by", v as LeadFormData["contacted_by"])}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Cerrado por</Label>
+                  <MemberSelect
+                    value={closedBy}
+                    onChange={(v) => setValue("closed_by", v as LeadFormData["closed_by"])}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Lo programa</Label>
+                  <MemberSelect
+                    value={scheduledBy}
+                    onChange={(v) => setValue("scheduled_by", v as LeadFormData["scheduled_by"])}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="col-span-2 space-y-1">
               <Label>Notas</Label>
               <Textarea {...register("notes")} placeholder="Notas sobre el lead..." rows={3} />

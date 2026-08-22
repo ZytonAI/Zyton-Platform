@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { notifyDiana } from "@/lib/diana-notify";
+import { TEAM_MEMBERS } from "@/lib/team";
+import { withColumnFallbackRows } from "@/lib/pg-compat";
+import { notifyAssignment } from "@/lib/notify-member";
+import { memberByEmail } from "@/lib/team";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -29,6 +33,8 @@ export async function POST(request: Request) {
   let tipo: string;
   let ciudad: string;
   let dianaTaskId: string | null = null;
+  let assignTo: string | null = null;
+  let actorSlug: string | null = null;
   const baseUrl = new URL(request.url).origin;
 
   try {
@@ -36,11 +42,16 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     userId = user.id;
+    actorSlug = memberByEmail(user.email)?.slug ?? null;
 
-    const body = await request.json().catch(() => ({})) as { tipo?: string; ciudad?: string; diana_task_id?: string };
+    const body = await request.json().catch(() => ({})) as {
+      tipo?: string; ciudad?: string; diana_task_id?: string; assign_to?: string;
+    };
     tipo = body.tipo ?? "";
     ciudad = body.ciudad ?? "";
     dianaTaskId = body.diana_task_id ?? null;
+    // A quién quedan los leads nuevos. Sin esto entran sin dueño y nadie los toma.
+    assignTo = TEAM_MEMBERS.some((m) => m.slug === body.assign_to) ? body.assign_to! : null;
 
     if (!tipo || !ciudad) {
       return NextResponse.json({ error: "Faltan tipo y ciudad" }, { status: 400 });
@@ -133,6 +144,7 @@ export async function POST(request: Request) {
 
         const rows = conContacto.map((p) => ({
           owner_id: userId,
+          contacted_by: assignTo,
           name: p.title ?? p.name ?? "Sin nombre",
           phone: p.phone!,
           website: p.website?.trim() || "Sin página web",
@@ -144,10 +156,10 @@ export async function POST(request: Request) {
           analyzed: false,
         }));
 
-        const { data: saved, error: dbErr } = await supabase
-          .from("leads")
-          .insert(rows)
-          .select();
+        const { data: saved, error: dbErr } = await withColumnFallbackRows(
+          rows,
+          (batch) => supabase.from("leads").insert(batch).select()
+        );
 
         if (dbErr) {
           send({ type: "error", message: `Error guardando en BD: ${dbErr.message}` });
@@ -155,8 +167,18 @@ export async function POST(request: Request) {
           return;
         }
 
-        const conWeb = saved?.filter((l) => l.website !== "Sin página web").length ?? 0;
-        const sinWeb = (saved?.length ?? 0) - conWeb;
+        // Un solo aviso por lote: si son 50 leads, no 50 mensajes
+        if (assignTo) {
+          await notifyAssignment(
+            assignTo,
+            actorSlug,
+            `🎯 *Leads nuevos de Raúl*\n\n${(saved ?? []).length} ${tipo} en ${ciudad} quedaron a tu nombre para contactar.`
+          );
+        }
+
+        const savedLeads = (saved ?? []) as { website?: string }[];
+        const conWeb = savedLeads.filter((l) => l.website !== "Sin página web").length;
+        const sinWeb = savedLeads.length - conWeb;
 
         send({
           type: "result",

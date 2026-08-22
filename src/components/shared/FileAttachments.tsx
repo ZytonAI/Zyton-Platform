@@ -5,6 +5,19 @@ import { Button } from "@/components/ui/button";
 import { FileText, Video, Download, Trash2, Upload, Play, Loader2 } from "lucide-react";
 import type { FileAttachment } from "@/types";
 import { toast } from "sonner";
+import { useMemberById } from "@/components/layout/SessionContext";
+
+/** Nombre de quien subió el archivo, si está en el equipo. */
+function UploadedBy({ ownerId }: { ownerId: string | null | undefined }) {
+  const member = useMemberById(ownerId);
+  if (!member) return null;
+  return (
+    <>
+      {" · "}
+      <span className="font-medium text-foreground/70">{member.name}</span>
+    </>
+  );
+}
 
 interface Props {
   attachments: FileAttachment[];
@@ -180,6 +193,7 @@ export function FileAttachments({ attachments, entityType, entityId, onUpload, o
                         : video
                         ? `Video · ${formatSize(file.size_bytes)}`
                         : formatSize(file.size_bytes)}
+                      <UploadedBy ownerId={file.owner_id} />
                     </p>
                   </div>
                   <div className="flex gap-1 shrink-0">

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { withColumnFallback } from "@/lib/pg-compat";
 import { calendarEventSchema } from "@/lib/validations/calendar-event.schema";
 import { NextResponse } from "next/server";
 
@@ -28,11 +29,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("calendar_events")
-    .insert({ ...parsed.data, owner_id: user.id })
-    .select()
-    .single();
+  const { data, error } = await withColumnFallback(
+    { ...parsed.data, owner_id: user.id },
+    (row) => supabase.from("calendar_events").insert(row).select().single()
+  );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

@@ -20,6 +20,9 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { LEAD_STATUS, LEAD_STATUS_ORDER } from "@/lib/status-config";
 import type { Conversation, Message, FileAttachment } from "@/types";
+import { useMemberById } from "@/components/layout/SessionContext";
+import { MemberSelect } from "@/components/shared/MemberTag";
+import { memberBySlug } from "@/lib/team";
 import { cn } from "@/lib/utils";
 
 function formatTime(iso: string) {
@@ -28,6 +31,18 @@ function formatTime(iso: string) {
 
 // Etiquetas placeholder que pone el webhook cuando el mensaje es solo media
 const MEDIA_PLACEHOLDERS = new Set(["[Imagen]", "[Audio]", "[Video]", "[Documento]", "[Archivo]"]);
+
+/**
+ * Quién mandó el mensaje. Los cuatro escriben desde el mismo número, así que
+ * sin esto el hilo no distingue quién respondió.
+ */
+function MessageAuthor({ ownerId }: { ownerId: string | null }) {
+  const member = useMemberById(ownerId);
+  if (!member) return null;
+  return (
+    <p className="text-[10px] font-semibold opacity-80 mb-0.5">{member.name}</p>
+  );
+}
 
 function MessageStatusTicks({ status }: { status: Message["status"] }) {
   if (status === "read") return <CheckCheck className="w-3.5 h-3.5 text-sky-300" />;
@@ -83,11 +98,13 @@ function MessageMedia({ msg }: { msg: Message }) {
 interface Props {
   conversation: Conversation;
   onBack?: () => void;
+  /** Se llama al reasignar el chat, para que la lista se vuelva a recortar */
+  onReassigned?: () => void;
 }
 
 type LeadStatus = "new" | "contacted" | "scheduled" | "qualified" | "lost" | "converted";
 
-export function MessageThread({ conversation, onBack }: Props) {
+export function MessageThread({ conversation, onBack, onReassigned }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -99,6 +116,7 @@ export function MessageThread({ conversation, onBack }: Props) {
   const [sendingFile, setSendingFile] = useState(false);
   const [leadStatus, setLeadStatus] = useState<LeadStatus | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -153,6 +171,34 @@ export function MessageThread({ conversation, onBack }: Props) {
     }
     loadLeadStatus().catch(() => {});
   }, [conversation.id, conversation.lead_id, conversation.contact_phone]);
+
+  /**
+   * El dueño del chat sale del lead vinculado, así que reasignar es cambiarle
+   * la etiqueta `contacted_by`. Sin lead no hay a quién asignárselo.
+   */
+  async function handleAssign(slug: string | null) {
+    if (!conversation.lead_id) {
+      toast.error("Este chat no está vinculado a ningún lead todavía");
+      return;
+    }
+    setAssigning(true);
+    try {
+      const res = await fetch(`/api/leads/${conversation.lead_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacted_by: slug }),
+      });
+      if (!res.ok) {
+        toast.error("No se pudo reasignar el chat");
+        return;
+      }
+      const member = memberBySlug(slug);
+      toast.success(member ? `Chat asignado a ${member.name}` : "Chat sin asignar");
+      onReassigned?.();
+    } finally {
+      setAssigning(false);
+    }
+  }
 
   async function handleChangeLeadStatus(status: LeadStatus) {
     let leadId = conversation.lead_id;
@@ -412,6 +458,16 @@ export function MessageThread({ conversation, onBack }: Props) {
           )}
         </div>
 
+        {/* Quién trabaja el chat — escribe la etiqueta del lead */}
+        <div className="hidden sm:block w-40 shrink-0">
+          <MemberSelect
+            value={conversation.assigned_to ?? null}
+            onChange={handleAssign}
+            placeholder="Sin asignar"
+            disabled={assigning || !conversation.lead_id}
+          />
+        </div>
+
         {/* Dropdown estado del lead — siempre visible */}
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -465,6 +521,7 @@ export function MessageThread({ conversation, onBack }: Props) {
                     msg.status === "failed" && "opacity-80 ring-1 ring-red-300"
                   )}
                 >
+                  {msg.direction === "outbound" && <MessageAuthor ownerId={msg.owner_id} />}
                   <MessageMedia msg={msg} />
                   {!hideBody && <p className="leading-relaxed break-words">{msg.body}</p>}
                   <div className={cn(

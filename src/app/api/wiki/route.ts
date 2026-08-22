@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { withColumnFallback } from "@/lib/pg-compat";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -7,6 +8,8 @@ const createPageSchema = z.object({
   content: z.unknown().optional(),
   parent_id: z.string().uuid().nullable().optional(),
   icon: z.string().max(16).optional(),
+  // personal = solo la ve quien la crea (RLS, migración 019)
+  visibility: z.enum(["team", "personal"]).optional(),
 });
 
 export async function GET() {
@@ -33,13 +36,18 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
   }
-  const { title = "Sin título", content = { type: "doc", content: [{ type: "paragraph" }] }, parent_id = null, icon = "📄" } = parsed.data;
+  const {
+    title = "Sin título",
+    content = { type: "doc", content: [{ type: "paragraph" }] },
+    parent_id = null,
+    icon = "📄",
+    visibility = "team",
+  } = parsed.data;
 
-  const { data, error } = await supabase
-    .from("workspace_pages")
-    .insert({ owner_id: user.id, title, content, parent_id, icon })
-    .select()
-    .single();
+  const { data, error } = await withColumnFallback(
+    { owner_id: user.id, title, content, parent_id, icon, visibility, updated_by: user.id },
+    (row) => supabase.from("workspace_pages").insert(row).select().single()
+  );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });

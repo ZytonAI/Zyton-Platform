@@ -1,4 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth/session";
+import { isOwner } from "@/lib/permissions";
+import { fetchConversations, scopeConversations } from "@/lib/conversation-scope";
 import { toWaChatId } from "@/lib/phone";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -11,22 +14,35 @@ const createConversationSchema = z.object({
 
 export async function GET() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, role, member } = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data, error } = await supabase
-    .from("conversations")
-    .select("*")
-    .order("last_message_at", { ascending: false, nullsFirst: false })
-    .limit(500);
+  // Mismo recorte que en la página: cada quien ve lo suyo, el Dueño todo
+  const all = await fetchConversations(supabase);
+  return NextResponse.json(scopeConversations(all, member?.slug, isOwner(role)));
+}
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
+/**
+ * Quien abre el chat de un lead que nadie había contactado queda como
+ * `contacted_by`. Así la vista personal de WhatsApp se llena sola, sin que
+ * haya que ir a etiquetar el lead a mano.
+ */
+async function tagLeadContactedBy(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  leadId: string,
+  slug: string | undefined
+) {
+  if (!slug) return;
+  await supabase
+    .from("leads")
+    .update({ contacted_by: slug })
+    .eq("id", leadId)
+    .is("contacted_by", null);
 }
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, member } = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = createConversationSchema.safeParse(await request.json().catch(() => null));
@@ -59,6 +75,10 @@ export async function POST(request: Request) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const linkedLead = lead_id ?? existing.lead_id;
+    if (linkedLead) await tagLeadContactedBy(supabase, linkedLead, member?.slug);
+
     return NextResponse.json(data);
   }
 
@@ -76,5 +96,8 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (lead_id) await tagLeadContactedBy(supabase, lead_id, member?.slug);
+
   return NextResponse.json(data);
 }

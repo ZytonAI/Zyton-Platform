@@ -1,5 +1,9 @@
+"use client";
+
 import type { HistoryEvent } from "@/types";
 import { Clock } from "lucide-react";
+import { useMemberById } from "@/components/layout/SessionContext";
+import { cn } from "@/lib/utils";
 
 interface Props {
   events: HistoryEvent[];
@@ -32,19 +36,36 @@ export function HistoryTimeline({ events }: Props) {
   return (
     <div className="space-y-3">
       {events.map((event) => (
-        <div key={event.id} className="flex gap-3">
-          <div className="text-base shrink-0 mt-0.5">
-            {EVENT_ICONS[event.event_type] ?? "📌"}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-foreground whitespace-pre-wrap">{event.description}</p>
-            <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
-              <Clock className="w-3 h-3" />
-              {formatDate(event.created_at)}
-            </div>
-          </div>
-        </div>
+        <HistoryRow key={event.id} event={event} />
       ))}
+    </div>
+  );
+}
+
+/** Una entrada del historial: qué pasó, quién lo hizo y cuándo. */
+function HistoryRow({ event }: { event: HistoryEvent }) {
+  const author = useMemberById(event.owner_id);
+
+  return (
+    <div className="flex gap-3">
+      <div className="text-base shrink-0 mt-0.5">
+        {EVENT_ICONS[event.event_type] ?? "📌"}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-foreground whitespace-pre-wrap">{event.description}</p>
+        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+          {author && (
+            <span className="inline-flex items-center gap-1 font-medium text-foreground/70">
+              <span className={cn("w-1.5 h-1.5 rounded-full", author.dot)} />
+              {author.name}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            {formatDate(event.created_at)}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

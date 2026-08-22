@@ -8,13 +8,15 @@ export interface DuplicateMatch {
 }
 
 /**
- * Busca en leads y clientes del owner un registro con el mismo teléfono
- * (normalizado, con/sin código de país) o el mismo email.
+ * Busca en los leads y clientes del workspace un registro con el mismo
+ * teléfono (normalizado, con/sin código de país) o el mismo email.
  * Devuelve el primer match o null.
+ *
+ * Busca en todo el workspace, no por persona: si Camilo ya tiene el lead,
+ * Daniel no debería poder crearlo otra vez.
  */
 export async function findDuplicate(
   supabase: SupabaseClient,
-  ownerId: string,
   phone: string | null | undefined,
   email: string | null | undefined,
   excludeId?: string

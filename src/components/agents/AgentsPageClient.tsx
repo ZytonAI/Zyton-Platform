@@ -23,6 +23,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MemberSelect } from "@/components/shared/MemberTag";
+import { useMySlug } from "@/components/layout/SessionContext";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import type { AgentEvent, Lead, WebAnalysis } from "@/types";
@@ -78,6 +80,10 @@ function StatusLog({ logs, running }: { logs: string[]; running: boolean }) {
 function RaulAgent({ onLeadsAdded }: { onLeadsAdded: () => void }) {
   const [tipo, setTipo] = useState("");
   const [ciudad, setCiudad] = useState("");
+  // Los leads nuevos quedan a nombre de alguien; por defecto, de quien lanza
+  // la búsqueda. Sin esto entran sin dueño y no aparecen en la vista de nadie.
+  const mySlug = useMySlug();
+  const [assignTo, setAssignTo] = useState<string | null>(mySlug);
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [results, setResults] = useState<Lead[]>([]);
@@ -87,7 +93,7 @@ function RaulAgent({ onLeadsAdded }: { onLeadsAdded: () => void }) {
     if (!tipo.trim() || !ciudad.trim()) { toast.error("Completa tipo y ciudad"); return; }
     setRunning(true); setLogs([]); setResults([]); setError(null);
     try {
-      for await (const event of readSSE("/api/agents/raul", { tipo, ciudad })) {
+      for await (const event of readSSE("/api/agents/raul", { tipo, ciudad, assign_to: assignTo })) {
         if (event.type === "status") {
           setLogs((p) => [...p, event.message ?? ""]);
         } else if (event.type === "result") {
@@ -134,6 +140,13 @@ function RaulAgent({ onLeadsAdded }: { onLeadsAdded: () => void }) {
             <Label htmlFor="ciudad" className="text-xs">Ciudad</Label>
             <Input id="ciudad" value={ciudad} onChange={(e) => setCiudad(e.target.value)}
               placeholder="Medellín Colombia" disabled={running} className="h-9 text-sm" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Asignar a</Label>
+            <MemberSelect value={assignTo} onChange={setAssignTo} disabled={running} />
+            <p className="text-[11px] text-muted-foreground">
+              Queda como responsable de contactarlos y verá sus chats de WhatsApp.
+            </p>
           </div>
         </div>
 

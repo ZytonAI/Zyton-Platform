@@ -13,6 +13,8 @@ import Link from "@tiptap/extension-link";
 import type { WikiPage } from "@/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useMemberById } from "@/components/layout/SessionContext";
+import { Lock, Users } from "lucide-react";
 import {
   Plus, Trash2, ChevronRight, ChevronDown, FileText,
   Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
@@ -130,6 +132,49 @@ function PageItem({
 }
 
 // ── Main component ──────────────────────────────────────────────
+/**
+ * Autoría y visibilidad de la página. Con cuatro personas escribiendo en la
+ * misma wiki, saber de quién es cada página es la mitad de la información.
+ */
+function PageMeta({
+  page,
+  onVisibility,
+}: {
+  page: WikiPage;
+  onVisibility: (v: "team" | "personal") => void;
+}) {
+  const author = useMemberById(page.owner_id);
+  const editor = useMemberById(page.updated_by);
+  const isPersonal = page.visibility === "personal";
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-5 text-xs text-muted-foreground">
+      {author && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${author.dot}`} />
+          <span className="font-medium text-foreground/70">{author.name}</span>
+        </span>
+      )}
+      {editor && editor.slug !== author?.slug && (
+        <span>· editada por {editor.name}</span>
+      )}
+      <button
+        onClick={() => onVisibility(isPersonal ? "team" : "personal")}
+        className="ml-auto inline-flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-muted transition-colors font-medium"
+        title={
+          isPersonal
+            ? "Solo tú ves esta página — clic para compartirla con el equipo"
+            : "La ve todo el equipo — clic para hacerla personal"
+        }
+      >
+        {isPersonal
+          ? <><Lock className="w-3 h-3" /> Personal</>
+          : <><Users className="w-3 h-3" /> Equipo</>}
+      </button>
+    </div>
+  );
+}
+
 export function WikiClient({ initialPages }: Props) {
   const [pages, setPages] = useState<WikiPage[]>(initialPages);
   const [selected, setSelected] = useState<WikiPage | null>(initialPages[0] ?? null);
@@ -205,6 +250,24 @@ export function WikiClient({ initialPages }: Props) {
     } else {
       toast.error("Error creando página");
     }
+  }
+
+  /** Personal = solo la ve quien la creó (lo aplica RLS, migración 019). */
+  async function handleVisibility(visibility: "team" | "personal") {
+    if (!selected) return;
+    const res = await fetch(`/api/wiki/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visibility }),
+    });
+    if (!res.ok) {
+      toast.error("No se pudo cambiar la visibilidad");
+      return;
+    }
+    const updated: WikiPage = await res.json();
+    setPages((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    setSelected(updated);
+    toast.success(visibility === "personal" ? "Página personal" : "Página del equipo");
   }
 
   async function handleDelete(id: string) {
@@ -353,6 +416,9 @@ export function WikiClient({ initialPages }: Props) {
           {/* Título + contenido */}
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-3xl mx-auto px-8 py-10">
+              {/* Quién la escribió y quién la ve */}
+              <PageMeta page={selected} onVisibility={handleVisibility} />
+
               {/* Icono + título */}
               <div className="mb-8">
                 <div className="relative inline-block mb-3">
