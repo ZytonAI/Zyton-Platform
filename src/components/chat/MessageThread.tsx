@@ -126,6 +126,8 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
   const [leadStatus, setLeadStatus] = useState<LeadStatus | null>(null);
   const [uploading, setUploading] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  // La lista tarda un momento en refrescarse: el desplegable muestra ya lo elegido
+  const [assignedTo, setAssignedTo] = useState<string | null>(conversation.assigned_to ?? null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -182,24 +184,36 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
   }, [conversation.id, conversation.lead_id, conversation.contact_phone]);
 
   /**
-   * El dueño del chat sale del lead vinculado, así que reasignar es cambiarle
-   * la etiqueta `contacted_by`. Sin lead no hay a quién asignárselo.
+   * La etiqueta se guarda en la conversación, así que un número que todavía no
+   * es lead también se puede repartir. Si el chat sí tiene lead, se le mueve
+   * también su `contacted_by` para que el CRM y el chat digan lo mismo.
    */
   async function handleAssign(slug: string | null) {
-    if (!conversation.lead_id) {
-      toast.error("Este chat no está vinculado a ningún lead todavía");
-      return;
-    }
     setAssigning(true);
     try {
-      const res = await fetch(`/api/leads/${conversation.lead_id}`, {
+      const res = await fetch(`/api/whatsapp/conversations/${conversation.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contacted_by: slug }),
+        body: JSON.stringify({ assigned_to: slug }),
       });
       if (!res.ok) {
         toast.error("No se pudo reasignar el chat");
         return;
+      }
+      // Si falta la migración 021 la columna no existe y el guardado no hace
+      // nada: mejor decirlo que dejar creer que quedó asignado.
+      const guardada = await res.json().catch(() => null);
+      if (slug && guardada && guardada.assigned_to !== slug) {
+        toast.error("Falta correr la migración 021 en Supabase para poder asignar chats");
+        return;
+      }
+      setAssignedTo(slug);
+      if (conversation.lead_id) {
+        await fetch(`/api/leads/${conversation.lead_id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contacted_by: slug }),
+        }).catch(() => {});
       }
       const member = memberBySlug(slug);
       toast.success(member ? `Chat asignado a ${member.name}` : "Chat sin asignar");
@@ -470,10 +484,10 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
         {/* Quién trabaja el chat — escribe la etiqueta del lead */}
         <div className="hidden sm:block w-40 shrink-0">
           <MemberSelect
-            value={conversation.assigned_to ?? null}
+            value={assignedTo}
             onChange={handleAssign}
             placeholder="Sin asignar"
-            disabled={assigning || !conversation.lead_id}
+            disabled={assigning}
           />
         </div>
 

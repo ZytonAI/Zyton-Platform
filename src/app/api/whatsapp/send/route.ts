@@ -41,6 +41,27 @@ export async function POST(request: Request) {
       from_phone: false,
     };
 
+    // WhatsApp no siempre devuelve el id del mensaje que acaba de mandar. Cuando
+    // pasa, el eco de `message_create` puede haberse guardado ya como si lo
+    // hubieran escrito desde el celular. Se adopta esa fila —poniéndole el autor
+    // real— en vez de insertar otra: si no, la respuesta salía dos veces.
+    let adoptado: string | null = null;
+    if (!messageRow.wa_message_id) {
+      const desde = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      const { data: eco } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("conversation_id", conversation_id)
+        .eq("direction", "outbound")
+        .eq("from_phone", true)
+        .eq("body", body.trim())
+        .gte("created_at", desde)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      adoptado = eco?.id ?? null;
+    }
+
     const { data: msg, error: msgErr } = retry_message_id
       ? await supabase
           .from("messages")
@@ -48,6 +69,12 @@ export async function POST(request: Request) {
           .eq("id", retry_message_id)
           .select()
           .single()
+      : adoptado
+      // El eco ya está en el hilo: solo hay que decir quién lo escribió (el
+      // estado no se toca, que puede venir ya entregado o leído).
+      ? await withColumnFallback({ owner_id: user.id, from_phone: false }, (row) =>
+          supabase.from("messages").update(row).eq("id", adoptado!).select().single()
+        )
       // upsert y no insert: el evento message_create del bridge puede haber
       // guardado este mismo mensaje primero. Gana esta fila, que sí sabe quién
       // lo mandó.

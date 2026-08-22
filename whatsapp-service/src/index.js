@@ -166,6 +166,67 @@ function esChatIndividual(from) {
   return !!from && from !== "status@broadcast" && !from.endsWith("@g.us") && !from.endsWith("@broadcast");
 }
 
+/**
+ * whatsapp-web.js busca el mensaje dentro de WhatsApp Web usando
+ * `msg.id._serialized` como llave — lo hace `downloadMedia()`, entre otros.
+ * En los chats con identificador @lid ese campo viene vacío, y entonces la
+ * descarga devuelve nada y el adjunto queda como "[Archivo no disponible]".
+ * Aquí se rellena con el id que ya reconstruimos, que tiene exactamente el
+ * mismo formato que usa WhatsApp (`fromMe_remote_id`).
+ */
+function ensureSerializedId(msg, waMessageId) {
+  if (!waMessageId || waMessageId.startsWith("sintetico_")) return;
+  try {
+    if (msg?.id && !msg.id._serialized) msg.id._serialized = waMessageId;
+  } catch {
+    // Objeto congelado: se sigue sin él, como antes
+  }
+}
+
+/**
+ * Descarga la media del mensaje. Reintenta una vez porque WhatsApp a veces
+ * todavía la está resolviendo cuando llega el evento (mediaStage != RESOLVED).
+ */
+async function descargarMedia(msg, waMessageId) {
+  ensureSerializedId(msg, waMessageId);
+  for (let intento = 1; intento <= 2; intento++) {
+    const media = await msg.downloadMedia().catch((err) => {
+      console.error(`downloadMedia falló para id=${waMessageId} (type=${msg.type}, intento ${intento}):`, err.message);
+      return null;
+    });
+    if (media?.data) return media;
+    if (intento === 1) await new Promise((r) => setTimeout(r, 1500));
+  }
+  return null;
+}
+
+/**
+ * Teléfono real del contacto.
+ *
+ * WhatsApp ya no siempre identifica a la gente por su número: los chats nuevos
+ * llegan como `269152866533531@lid`, que NO es un teléfono. Guardarlo tal cual
+ * hacía que el chat nunca encontrara su lead (y por eso no se podía asignar).
+ * `getContactLidAndPhone` traduce ese identificador al número de verdad.
+ */
+async function resolverTelefono(chatId, contact) {
+  const crudo = chatId.replace(/@.*$/, "");
+  if (!chatId.endsWith("@lid")) return contact?.number || crudo;
+
+  if (typeof client.getContactLidAndPhone === "function") {
+    try {
+      const [info] = await client.getContactLidAndPhone([chatId]);
+      const pn = info?.pn?.replace(/@.*$/, "");
+      if (pn && /^\d{7,15}$/.test(pn)) return pn;
+    } catch (err) {
+      console.warn(`No se pudo traducir el LID ${chatId} a número: ${err.message}`);
+    }
+  }
+  // Algunos contactos sí traen el número por su lado
+  const delContacto = contact?.number;
+  if (delContacto && /^\d{7,15}$/.test(delContacto) && delContacto !== crudo) return delContacto;
+  return crudo;
+}
+
 // ── Reenvío de mensajes al webhook (entrantes y propios) ──
 async function forwardIncomingMessage(msg) {
   // En un mensaje propio el contacto está en `to`; en uno entrante, en `from`
@@ -179,13 +240,14 @@ async function forwardIncomingMessage(msg) {
     console.error(`Mensaje descartado: no se pudo derivar un id (type=${msg.type} chat=${chatId})`);
     return;
   }
+  ensureSerializedId(msg, waMessageId);
 
   // getContact() devuelve el remitente; para los propios hay que pedir el destinatario
   const contact = msg.fromMe
     ? await client.getContactById(chatId).catch(() => null)
     : await msg.getContact().catch(() => null);
   const contactName = contact?.pushname || contact?.name || null;
-  const contactPhone = contact?.number || chatId.replace(/@.*$/, "");
+  const contactPhone = await resolverTelefono(chatId, contact);
 
   const payload = {
     type: "message",
@@ -207,10 +269,7 @@ async function forwardIncomingMessage(msg) {
     payload.body = `👤 Contacto compartido:\n${msg.body || msg.vCards?.join("\n") || ""}`.trim();
   } else if (msg.hasMedia) {
     // Imagen, video, audio/nota de voz, documento, sticker
-    const media = await msg.downloadMedia().catch((err) => {
-      console.error(`downloadMedia falló para id=${waMessageId} (type=${msg.type}):`, err.message);
-      return null;
-    });
+    const media = await descargarMedia(msg, waMessageId);
     if (media?.data) {
       const rawBytes = Buffer.byteLength(media.data, "base64");
       console.log(`Media descargada: id=${waMessageId} mime=${media.mimetype} bytes=${rawBytes}`);
@@ -352,7 +411,12 @@ app.post("/send", async (req, res) => {
   }
   try {
     const sent = await client.sendMessage(to, body);
-    res.json({ ok: true, wa_message_id: messageId(sent) });
+    // El mensaje sale igual, pero WhatsApp no siempre devuelve el objeto del
+    // mensaje recién enviado (pasa en los chats @lid). Sin id la plataforma
+    // lo reconcilia con el evento message_create, así que no se pierde nada.
+    const waMessageId = messageId(sent);
+    if (!waMessageId) console.warn(`Enviado a ${to}, pero WhatsApp no devolvió su id`);
+    res.json({ ok: true, wa_message_id: waMessageId });
   } catch (err) {
     res.status(500).json({ error: err.message || "Error enviando mensaje" });
   }
@@ -382,7 +446,9 @@ app.post("/send-file", async (req, res) => {
     const sent = await client.sendMessage(to, media, {
       sendMediaAsDocument: !fileMime.startsWith("image/") && !fileMime.startsWith("video/"),
     });
-    res.json({ ok: true, wa_message_id: messageId(sent) });
+    const waMessageId = messageId(sent);
+    if (!waMessageId) console.warn(`Archivo enviado a ${to}, pero WhatsApp no devolvió su id`);
+    res.json({ ok: true, wa_message_id: waMessageId });
   } catch (err) {
     res.status(500).json({ error: err.message || "Error enviando archivo" });
   }

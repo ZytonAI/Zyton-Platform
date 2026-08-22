@@ -10,6 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Etiquetas de equipo**: leads y clientes llevan el slug de quién los trabaja — `leads.contacted_by / closed_by / scheduled_by` y `clients.closed_by / scheduled_by` (migración 018). De ahí sale el filtro del chat: una conversación es de quien contactó su lead (o cerró su cliente); las que no tienen dueño las ven los cuatro. Abrir el chat de un lead sin etiqueta lo marca automáticamente como contactado por quien lo abrió.
 
+El chat además tiene su propia etiqueta, `conversations.assigned_to` (migración 021), que manda sobre la del lead: un número que todavía no es lead también se puede repartir. Asignar desde el hilo escribe las dos cuando hay lead.
+
 **Calendario y Wiki**: cada evento y cada página es `team` (lo ve el equipo, default) o `personal` (solo quien lo creó, garantizado por RLS). Migraciones 018 y 019.
 
 **Quién hizo qué**: `owner_id` (creador) se traduce a persona con `src/lib/directory.ts` y se pinta en el historial, los adjuntos, los mensajes de WhatsApp salientes, la Wiki y las fichas. El contexto de sesión (`SessionContext`) lleva rol, slug propio y ese directorio.
@@ -143,6 +145,14 @@ supabase/migrations/      # SQL con schema y políticas RLS
 ## Estado
 
 Todo lo planeado está en producción: auth y roles, CRM de leads y clientes, facturas, calendario, wiki, tablero To Do, chat de WhatsApp y los agentes (Raúl, Elisa, Davoo) más Diana.
+
+## WhatsApp — cosas que muerden
+
+**El id del mensaje.** WhatsApp Web no siempre trae `msg.id._serialized`; en los chats `@lid` viene vacío. El bridge lo reconstruye (`messageId`) y se lo devuelve al objeto antes de bajar adjuntos (`ensureSerializedId`), porque `downloadMedia()` lo usa como llave — sin eso todo adjunto quedaba como "[Archivo no disponible]".
+
+**El eco de lo que uno manda.** `client.sendMessage` puede devolver `undefined` aunque el mensaje salga, así que la fila se guarda sin `wa_message_id` y el evento `message_create` llega como si lo hubieran escrito desde el celular. Las rutas `/send` y `/send-file` y el webhook lo reconcilian (mismo chat, mismo texto o archivo por archivo, menos de 2 minutos) para no pintar la burbuja dos veces. Ante la duda se inserta: repetir una burbuja es mejor que tragarse un mensaje.
+
+**`@lid` no es un teléfono.** Los chats nuevos llegan identificados como `269152866533531@lid`. El bridge lo traduce con `getContactLidAndPhone` y el webhook cura las conversaciones viejas (teléfono real + vínculo al lead) cuando entra el siguiente mensaje.
 
 ## whatsapp-service — ojo
 

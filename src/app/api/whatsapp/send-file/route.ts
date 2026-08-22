@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { withColumnFallback } from "@/lib/pg-compat";
 import { sendBridgeFile } from "@/lib/wa-bridge";
 import { sendFileSchema } from "@/lib/validations/chat.schema";
 import { NextResponse } from "next/server";
@@ -103,20 +104,46 @@ export async function POST(request: Request) {
   try {
     const sent = await sendBridgeFile(conv.wa_chat_id, base64, mimeType, fileName);
 
-    const { data: msg, error: msgErr } = await supabase
-      .from("messages")
-      .insert({
-        owner_id: user.id,
-        conversation_id,
-        wa_message_id: sent.wa_message_id || null,
-        direction: "outbound",
-        body,
-        media_url: sentMediaUrl,
-        media_type: sentMediaType,
-        status: "sent",
-      })
-      .select()
-      .single();
+    // Igual que en /send: cuando WhatsApp no devuelve el id del envío, el eco
+    // del celular puede haber guardado ya este archivo. Se adopta esa fila
+    // —con el archivo bueno y su autor— en vez de repetir la burbuja.
+    let adoptado: string | null = null;
+    if (!sent.wa_message_id) {
+      const desde = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      const { data: eco } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("conversation_id", conversation_id)
+        .eq("direction", "outbound")
+        .eq("from_phone", true)
+        .not("media_url", "is", null)
+        .gte("created_at", desde)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      adoptado = eco?.id ?? null;
+    }
+
+    const messageRow = {
+      owner_id: user.id,
+      conversation_id,
+      wa_message_id: sent.wa_message_id || null,
+      direction: "outbound" as const,
+      body,
+      media_url: sentMediaUrl,
+      media_type: sentMediaType,
+      status: "sent" as const,
+      from_phone: false,
+    };
+
+    const { data: msg, error: msgErr } = adoptado
+      ? await withColumnFallback(
+          { owner_id: user.id, from_phone: false, body, media_url: sentMediaUrl, media_type: sentMediaType },
+          (row) => supabase.from("messages").update(row).eq("id", adoptado!).select().single()
+        )
+      : await withColumnFallback(messageRow, (row) =>
+          supabase.from("messages").insert(row).select().single()
+        );
 
     if (msgErr) throw new Error(msgErr.message);
 

@@ -1,9 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
+import { withColumnFallback } from "@/lib/pg-compat";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { TEAM_SLUGS } from "@/lib/team";
 
 const patchConversationSchema = z.object({
   lead_id: z.string().uuid().nullable().optional(),
+  // Quién trabaja el chat. Va en la conversación y no solo en el lead porque
+  // un número que todavía no es lead también hay que poder repartirlo.
+  assigned_to: z.enum(TEAM_SLUGS).nullable().optional(),
 });
 
 export async function PATCH(
@@ -19,14 +24,17 @@ export async function PATCH(
   if (!parsed.success) {
     return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
   }
-  const { lead_id } = parsed.data;
+  const { lead_id, assigned_to } = parsed.data;
 
-  const { data, error } = await supabase
-    .from("conversations")
-    .update({ lead_id: lead_id ?? null, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
+  // Solo se toca lo que venga en el cuerpo: asignar el chat no debe
+  // desvincularlo de su lead, ni al revés.
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if ("lead_id" in parsed.data) patch.lead_id = lead_id ?? null;
+  if ("assigned_to" in parsed.data) patch.assigned_to = assigned_to ?? null;
+
+  const { data, error } = await withColumnFallback(patch, (row) =>
+    supabase.from("conversations").update(row).eq("id", id).select().single()
+  );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);

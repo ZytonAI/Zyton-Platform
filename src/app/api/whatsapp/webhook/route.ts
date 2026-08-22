@@ -31,6 +31,15 @@ function extFromMime(mime: string | undefined, fileName: string | null | undefin
   return map[base] ?? "bin";
 }
 
+/** Lead del workspace cuyo teléfono coincide con el del chat */
+async function buscarLeadPorTelefono(
+  supabase: ReturnType<typeof createAdminClient>,
+  phone: string
+): Promise<string | null> {
+  const { data: leads } = await supabase.from("leads").select("id, phone").not("phone", "is", null);
+  return leads?.find((l) => phonesMatch(l.phone, phone))?.id ?? null;
+}
+
 // Los acks solo avanzan: sent → delivered → read; failed siempre gana
 const STATUS_RANK: Record<string, number> = { sent: 0, delivered: 1, read: 2, failed: 3 };
 
@@ -145,15 +154,8 @@ export async function POST(request: Request) {
 
   // Si no existe, crear nueva conversación e intentar vincular al lead por teléfono
   if (!convId) {
-    let leadId: string | null = null;
-    if (contact_phone) {
-      const { data: leads } = await supabase
-        .from("leads")
-        .select("id, phone")
-        .eq("owner_id", owner_id)
-        .not("phone", "is", null);
-      leadId = leads?.find((l) => phonesMatch(l.phone, contact_phone))?.id ?? null;
-    }
+    // El workspace es compartido: el lead puede haberlo creado cualquiera
+    const leadId = contact_phone ? await buscarLeadPorTelefono(supabase, contact_phone) : null;
 
     const { data: newConv, error: convErr } = await supabase
       .from("conversations")
@@ -172,6 +174,65 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Error guardando conversacion" }, { status: 500 });
     }
     convId = newConv.id;
+  }
+
+  // ── Sanar conversaciones guardadas con un @lid en vez de un teléfono ──
+  // WhatsApp identifica los chats nuevos como "…@lid", que no es un número: esas
+  // conversaciones quedaron sin teléfono real y por lo tanto sin lead. Ahora que
+  // el bridge traduce el @lid, se corrigen solas al llegar el siguiente mensaje.
+  if (contact_phone) {
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("contact_phone, lead_id")
+      .eq("id", convId)
+      .maybeSingle();
+
+    const patch: Record<string, unknown> = {};
+    if (conv && !phonesMatch(conv.contact_phone, contact_phone)) {
+      patch.contact_phone = contact_phone;
+    }
+    if (conv && !conv.lead_id) {
+      const leadId = await buscarLeadPorTelefono(supabase, contact_phone);
+      if (leadId) patch.lead_id = leadId;
+    }
+    if (Object.keys(patch).length > 0) {
+      await supabase.from("conversations").update(patch).eq("id", convId);
+    }
+  }
+
+  // ── ¿Es el eco de algo que acabamos de mandar desde la plataforma? ──
+  // WhatsApp no siempre devuelve el id del mensaje recién enviado, así que esa
+  // fila quedó guardada sin `wa_message_id`. Si además insertáramos la copia que
+  // llega por `message_create`, la respuesta saldría dos veces en el hilo. En vez
+  // de eso se le pone el id a la fila que ya existe —que además es la que sabe
+  // quién escribió— y así también le llegan los acuses de entregado y leído.
+  //
+  // Solo se reconcilia con una coincidencia clara (mismo texto, o un archivo
+  // contra un archivo): ante la duda se inserta, porque perder un mensaje que
+  // alguien escribió desde el celular es peor que repetir una burbuja.
+  if (direction === "outbound") {
+    const desde = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const { data: pendientes } = await supabase
+      .from("messages")
+      .select("id, body, media_url")
+      .eq("conversation_id", convId)
+      .eq("direction", "outbound")
+      .is("wa_message_id", null)
+      .neq("status", "failed")
+      .gte("created_at", desde)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    const propio = body
+      ? pendientes?.find((m) => m.body === body)
+      : hasMedia
+        ? pendientes?.find((m) => m.media_url)
+        : undefined;
+
+    if (propio) {
+      await supabase.from("messages").update({ wa_message_id }).eq("id", propio.id);
+      return NextResponse.json({ ok: true, merged: true });
+    }
   }
 
   // ── Media: decodificar y subir a Storage (bucket privado wa-media) ──

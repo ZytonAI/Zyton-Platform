@@ -4,10 +4,11 @@ import type { Conversation, MemberTag } from "@/types";
 /**
  * Quién trabaja cada chat de WhatsApp.
  *
- * La conversación no tiene dueño propio: lo hereda del lead vinculado
- * (`leads.contacted_by`) o, si es un cliente, de `clients.closed_by`. Así, al
- * etiquetar un lead como "contactado por Camilo", su chat aparece en la vista
- * de Camilo sin tener que asignar nada más.
+ * Manda la etiqueta propia del chat (`conversations.assigned_to`, la que se
+ * elige desde el desplegable del hilo). Si no tiene, la hereda del lead
+ * vinculado (`leads.contacted_by`) o, si es un cliente, de `clients.closed_by`:
+ * así, al etiquetar un lead como "contactado por Camilo", su chat aparece en la
+ * vista de Camilo sin tener que asignar nada más.
  *
  * Un chat sin dueño (número desconocido, o lead sin etiqueta) lo ven los
  * cuatro — si no, un mensaje entrante nuevo no le llegaría a nadie.
@@ -20,7 +21,7 @@ type ConversationRow = Conversation & {
 };
 
 function assignedTo(row: ConversationRow): MemberTag {
-  return row.leads?.contacted_by ?? row.clients?.closed_by ?? null;
+  return row.assigned_to ?? row.leads?.contacted_by ?? row.clients?.closed_by ?? null;
 }
 
 /** ¿Este chat le toca a esta persona? Los que no tienen dueño le tocan a todos. */
@@ -47,7 +48,11 @@ export async function fetchConversations(supabase: SupabaseClient): Promise<Conv
 
   if (withTags.error) {
     const plain = await query("*");
-    return ((plain.data ?? []) as unknown as Conversation[]).map((c) => ({ ...c, assigned_to: null }));
+    return ((plain.data ?? []) as unknown as Conversation[]).map((c) => ({
+      ...c,
+      // Sin la migración 021 la columna no existe y el chat queda sin dueño
+      assigned_to: c.assigned_to ?? null,
+    }));
   }
 
   return ((withTags.data ?? []) as unknown as ConversationRow[]).map((row) => {
