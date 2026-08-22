@@ -24,6 +24,10 @@ const webhookMessageSchema = z.object({
   wa_message_id: z.string().min(1),
   // body es opcional cuando el mensaje trae media (imagen/audio/video/documento)
   body: z.string().optional(),
+  // "outbound" = lo escribió alguien del equipo desde el celular, no desde la
+  // plataforma. El equipo comparte un número, así que esas respuestas también
+  // tienen que verse en el CRM. Si no viene, es un mensaje que entra.
+  direction: z.enum(["inbound", "outbound"]).optional(),
   contact_phone: z.string().optional(),
   // Contactos con identificador @lid (privacidad activada / cuentas de negocio)
   // no siempre traen nombre visible — el bridge manda null explícito en ese caso.

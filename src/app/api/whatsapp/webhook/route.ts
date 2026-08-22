@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { phonesMatch } from "@/lib/phone";
 import { webhookPayloadSchema } from "@/lib/validations/chat.schema";
+import { withColumnFallback } from "@/lib/pg-compat";
 import { NextResponse } from "next/server";
 
 // Etiquetas de preview cuando el mensaje trae media sin texto
@@ -95,6 +96,8 @@ export async function POST(request: Request) {
 
   // ── Evento message ──
   const { wa_chat_id, wa_message_id, contact_phone, contact_name, timestamp } = payload;
+  // Los que escribe el equipo desde el celular llegan como "outbound"
+  const direction = payload.direction ?? "inbound";
   const hasMedia = !!payload.media_base64;
   const body = payload.body?.trim() || "";
 
@@ -202,23 +205,27 @@ export async function POST(request: Request) {
   const displayBody = body || mediaLabel(media_type ?? undefined);
 
   // ── Insertar el mensaje PRIMERO; solo si realmente se insertó, tocar contadores ──
-  const { data: insertedMsg, error: msgErr } = await supabase
-    .from("messages")
-    .upsert(
-      {
-        owner_id,
-        conversation_id: convId,
-        wa_message_id,
-        direction: "inbound",
-        body: displayBody,
-        media_url,
-        media_type,
-        status: "delivered",
-        created_at: timestamp ?? new Date().toISOString(),
-      },
-      { onConflict: "wa_message_id", ignoreDuplicates: true }
-    )
-    .select("id");
+  const { data: insertedMsg, error: msgErr } = await withColumnFallback(
+    {
+      owner_id,
+      conversation_id: convId,
+      wa_message_id,
+      direction,
+      body: displayBody,
+      media_url,
+      media_type,
+      // Lo que sale del celular ya está entregado desde el lado del equipo
+      status: direction === "outbound" ? "sent" : "delivered",
+      // Lo saliente que llega por aquí se escribió en el celular: no se sabe quién
+      from_phone: direction === "outbound",
+      created_at: timestamp ?? new Date().toISOString(),
+    },
+    (row) =>
+      supabase
+        .from("messages")
+        .upsert(row, { onConflict: "wa_message_id", ignoreDuplicates: true })
+        .select("id")
+  );
 
   if (msgErr) {
     return NextResponse.json({ error: "Error guardando mensaje" }, { status: 500 });
@@ -227,7 +234,10 @@ export async function POST(request: Request) {
   const actuallyInserted = (insertedMsg?.length ?? 0) > 0;
 
   if (actuallyInserted) {
-    await supabase.rpc("increment_unread", { conversation_id: convId });
+    // Solo lo que entra queda sin leer: lo que escribió el propio equipo, no
+    if (direction === "inbound") {
+      await supabase.rpc("increment_unread", { conversation_id: convId });
+    }
     await supabase
       .from("conversations")
       .update({

@@ -116,6 +116,11 @@ export interface Message {
   media_url: string | null;
   media_type: string | null;
   status: MessageStatus;
+  /**
+   * true = lo escribió alguien desde el WhatsApp del celular. En ese caso
+   * `owner_id` es solo el dueño de la sesión: no se sabe quién tecleó.
+   */
+  from_phone?: boolean;
   created_at: string;
   /** URL firmada (1 h) generada por la API al listar mensajes con media */
   media_signed_url?: string;

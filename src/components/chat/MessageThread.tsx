@@ -35,9 +35,18 @@ const MEDIA_PLACEHOLDERS = new Set(["[Imagen]", "[Audio]", "[Video]", "[Document
 /**
  * Quién mandó el mensaje. Los cuatro escriben desde el mismo número, así que
  * sin esto el hilo no distingue quién respondió.
+ *
+ * Si se escribió desde el celular no hay forma de saber quién fue —WhatsApp no
+ * lo dice— y se marca como tal en vez de atribuírselo a quien conectó la sesión.
  */
-function MessageAuthor({ ownerId }: { ownerId: string | null }) {
-  const member = useMemberById(ownerId);
+function MessageAuthor({ msg }: { msg: Message }) {
+  const member = useMemberById(msg.owner_id);
+
+  if (msg.from_phone) {
+    return (
+      <p className="text-[10px] font-semibold opacity-70 mb-0.5">Desde el celular</p>
+    );
+  }
   if (!member) return null;
   return (
     <p className="text-[10px] font-semibold opacity-80 mb-0.5">{member.name}</p>
@@ -521,7 +530,7 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
                     msg.status === "failed" && "opacity-80 ring-1 ring-red-300"
                   )}
                 >
-                  {msg.direction === "outbound" && <MessageAuthor ownerId={msg.owner_id} />}
+                  {msg.direction === "outbound" && <MessageAuthor msg={msg} />}
                   <MessageMedia msg={msg} />
                   {!hideBody && <p className="leading-relaxed break-words">{msg.body}</p>}
                   <div className={cn(

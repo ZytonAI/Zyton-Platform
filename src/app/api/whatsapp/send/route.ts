@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { withColumnFallback } from "@/lib/pg-compat";
 import { sendBridgeMessage } from "@/lib/wa-bridge";
 import { sendMessageSchema } from "@/lib/validations/chat.schema";
 import { NextResponse } from "next/server";
@@ -36,6 +37,8 @@ export async function POST(request: Request) {
       direction: "outbound" as const,
       body: body.trim(),
       status: "sent" as const,
+      // Escrito desde la plataforma: aquí sí sabemos quién fue (owner_id)
+      from_phone: false,
     };
 
     const { data: msg, error: msgErr } = retry_message_id
@@ -45,7 +48,16 @@ export async function POST(request: Request) {
           .eq("id", retry_message_id)
           .select()
           .single()
-      : await supabase.from("messages").insert(messageRow).select().single();
+      // upsert y no insert: el evento message_create del bridge puede haber
+      // guardado este mismo mensaje primero. Gana esta fila, que sí sabe quién
+      // lo mandó.
+      : await withColumnFallback(messageRow, (row) =>
+          supabase
+            .from("messages")
+            .upsert(row, { onConflict: "wa_message_id" })
+            .select()
+            .single()
+        );
 
     if (msgErr) throw new Error(msgErr.message);
 

@@ -83,11 +83,29 @@ function wireClientEvents(c) {
 
   // ── Mensajes entrantes → webhook de la plataforma ──
   c.on("message", async (msg) => {
-    console.log(`Mensaje entrante: type=${msg.type} hasMedia=${msg.hasMedia} from=${msg.from} id=${msg.id?._serialized}`);
+    console.log(
+      `Mensaje entrante: type=${msg.type} hasMedia=${msg.hasMedia} from=${msg.from} id=${messageId(msg)}`
+    );
     try {
       await forwardIncomingMessage(msg);
     } catch (err) {
       console.error("Error reenviando mensaje al webhook:", err.message, err.stack);
+    }
+  });
+
+  // ── Mensajes escritos desde el celular → webhook ──
+  // El equipo comparte un número: si alguien contesta desde su teléfono, esa
+  // respuesta también tiene que verse en el CRM. `message` no dispara para los
+  // mensajes propios, por eso hace falta `message_create`.
+  c.on("message_create", async (msg) => {
+    if (!msg.fromMe) return; // los entrantes ya los trae el evento `message`
+    console.log(
+      `Mensaje propio (desde el celular): type=${msg.type} to=${msg.to} id=${messageId(msg)}`
+    );
+    try {
+      await forwardIncomingMessage(msg);
+    } catch (err) {
+      console.error("Error reenviando mensaje propio al webhook:", err.message, err.stack);
     }
   });
 
@@ -96,9 +114,16 @@ function wireClientEvents(c) {
   c.on("message_ack", (msg, ack) => {
     const ackStatus = ack === 3 || ack === 4 ? "read" : ack === 2 ? "delivered" : null;
     if (!ackStatus) return;
+
+    // Sin id no hay mensaje que marcar, y de los grupos no guardamos nada:
+    // mandarlo igual solo generaba HTTP 400 en el webhook.
+    const waMessageId = messageId(msg);
+    if (!waMessageId || waMessageId.startsWith("sintetico_")) return;
+    if (!esChatIndividual(msg.to || msg.from)) return;
+
     postWebhook({
       type: "ack",
-      wa_message_id: msg.id?._serialized,
+      wa_message_id: waMessageId,
       status: ackStatus,
       session_phone: sessionPhone,
     }).catch(() => {});
@@ -107,19 +132,66 @@ function wireClientEvents(c) {
 
 wireClientEvents(client);
 
-// ── Reenvío de mensajes entrantes ──
-async function forwardIncomingMessage(msg) {
-  // Ignorar estados/historias y mensajes de grupos (la plataforma modela chats 1:1)
-  if (msg.from === "status@broadcast" || msg.from.endsWith("@g.us")) return;
+/**
+ * Identificador del mensaje para la plataforma.
+ *
+ * Lo normal es `msg.id._serialized`, pero según la versión de WhatsApp Web
+ * ese campo puede no venir (se veía `id=undefined` en los logs y la
+ * plataforma rechazaba el payload con HTTP 400). Aquí se reconstruye a partir
+ * de las piezas y, si tampoco están, se arma uno sintético: es preferible que
+ * el mensaje llegue con un id inventado —y se pierda el acuse de entregado— a
+ * perder el mensaje entero.
+ */
+function messageId(msg) {
+  const id = msg?.id;
+  if (typeof id === "string" && id) return id;
+  if (id?._serialized) return id._serialized;
 
-  const contact = await msg.getContact().catch(() => null);
+  if (id?.id) {
+    const remote = id.remote?._serialized || id.remote || msg?.from || "";
+    return `${id.fromMe ? "true" : "false"}_${remote}_${id.id}`;
+  }
+
+  // Último recurso: chat + marca de tiempo. Determinista, así que si el mismo
+  // mensaje se reenvía dos veces la plataforma lo sigue deduplicando.
+  if (msg?.from && msg?.timestamp) {
+    console.warn(`Mensaje sin id utilizable (type=${msg.type}) — se usa uno sintético`);
+    return `sintetico_${msg.from}_${msg.timestamp}`;
+  }
+  return null;
+}
+
+/** Grupos, estados y difusiones: la plataforma modela chats 1:1 */
+function esChatIndividual(from) {
+  return !!from && from !== "status@broadcast" && !from.endsWith("@g.us") && !from.endsWith("@broadcast");
+}
+
+// ── Reenvío de mensajes al webhook (entrantes y propios) ──
+async function forwardIncomingMessage(msg) {
+  // En un mensaje propio el contacto está en `to`; en uno entrante, en `from`
+  const chatId = msg.fromMe ? msg.to : msg.from;
+
+  // Ignorar estados/historias y mensajes de grupos (la plataforma modela chats 1:1)
+  if (!esChatIndividual(chatId)) return;
+
+  const waMessageId = messageId(msg);
+  if (!waMessageId) {
+    console.error(`Mensaje descartado: no se pudo derivar un id (type=${msg.type} chat=${chatId})`);
+    return;
+  }
+
+  // getContact() devuelve el remitente; para los propios hay que pedir el destinatario
+  const contact = msg.fromMe
+    ? await client.getContactById(chatId).catch(() => null)
+    : await msg.getContact().catch(() => null);
   const contactName = contact?.pushname || contact?.name || null;
-  const contactPhone = contact?.number || msg.from.replace(/@.*$/, "");
+  const contactPhone = contact?.number || chatId.replace(/@.*$/, "");
 
   const payload = {
     type: "message",
-    wa_chat_id: msg.from,
-    wa_message_id: msg.id._serialized,
+    direction: msg.fromMe ? "outbound" : "inbound",
+    wa_chat_id: chatId,
+    wa_message_id: waMessageId,
     contact_phone: contactPhone,
     contact_name: contactName,
     timestamp: new Date(msg.timestamp * 1000).toISOString(),
@@ -136,12 +208,12 @@ async function forwardIncomingMessage(msg) {
   } else if (msg.hasMedia) {
     // Imagen, video, audio/nota de voz, documento, sticker
     const media = await msg.downloadMedia().catch((err) => {
-      console.error(`downloadMedia falló para id=${msg.id._serialized} (type=${msg.type}):`, err.message);
+      console.error(`downloadMedia falló para id=${waMessageId} (type=${msg.type}):`, err.message);
       return null;
     });
     if (media?.data) {
       const rawBytes = Buffer.byteLength(media.data, "base64");
-      console.log(`Media descargada: id=${msg.id._serialized} mime=${media.mimetype} bytes=${rawBytes}`);
+      console.log(`Media descargada: id=${waMessageId} mime=${media.mimetype} bytes=${rawBytes}`);
       if (rawBytes <= MAX_MEDIA_BYTES) {
         payload.media_base64 = media.data;
         payload.media_mime = media.mimetype;
@@ -150,7 +222,7 @@ async function forwardIncomingMessage(msg) {
         payload.body = "[Archivo demasiado grande]";
       }
     } else {
-      console.warn(`downloadMedia no devolvió datos para id=${msg.id._serialized} (type=${msg.type})`);
+      console.warn(`downloadMedia no devolvió datos para id=${waMessageId} (type=${msg.type})`);
       if (!payload.body) payload.body = "[Archivo no disponible]";
     }
   }
@@ -280,7 +352,7 @@ app.post("/send", async (req, res) => {
   }
   try {
     const sent = await client.sendMessage(to, body);
-    res.json({ ok: true, wa_message_id: sent.id._serialized });
+    res.json({ ok: true, wa_message_id: messageId(sent) });
   } catch (err) {
     res.status(500).json({ error: err.message || "Error enviando mensaje" });
   }
@@ -310,7 +382,7 @@ app.post("/send-file", async (req, res) => {
     const sent = await client.sendMessage(to, media, {
       sendMediaAsDocument: !fileMime.startsWith("image/") && !fileMime.startsWith("video/"),
     });
-    res.json({ ok: true, wa_message_id: sent.id._serialized });
+    res.json({ ok: true, wa_message_id: messageId(sent) });
   } catch (err) {
     res.status(500).json({ error: err.message || "Error enviando archivo" });
   }
