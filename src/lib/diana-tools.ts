@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { conHoraDeColombia } from "@/lib/event-time";
 import type OpenAI from "openai";
 import { canManageBilling, type Role } from "@/lib/permissions";
 
@@ -384,7 +385,9 @@ export async function runTool(
         // Normalizar la fecha — aceptar ISO o cualquier string parseable
         let eventDate: string;
         try {
-          const d = new Date(args.event_date as string);
+          // La hora que dice Diana es la de Colombia; sin ponerle el huso, el
+          // servidor (que corre en UTC) la agendaba cinco horas antes.
+          const d = new Date(conHoraDeColombia(args.event_date as string));
           if (isNaN(d.getTime())) throw new Error("Fecha inválida");
           eventDate = d.toISOString();
         } catch {

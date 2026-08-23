@@ -28,6 +28,7 @@ import {
 import { Lock, Users } from "lucide-react";
 import { toast } from "sonner";
 import type { CalendarEvent } from "@/types";
+import { splitDateTime } from "@/lib/event-time";
 
 interface Props {
   open: boolean;
@@ -35,13 +36,6 @@ interface Props {
   onSave: (data: CalendarEvent) => void;
   initialData?: CalendarEvent;
   defaultDate?: string; // "YYYY-MM-DDTHH:mm" pre-filled when creating from calendar
-}
-
-function splitDateTime(iso: string): { date: string; time: string } {
-  if (!iso) return { date: "", time: "" };
-  const clean = iso.slice(0, 16); // "YYYY-MM-DDTHH:mm"
-  const [date, time] = clean.split("T");
-  return { date: date ?? "", time: time ?? "" };
 }
 
 export function EventForm({ open, onClose, onSave, initialData, defaultDate }: Props) {

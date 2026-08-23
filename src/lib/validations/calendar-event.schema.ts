@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { conHoraDeColombia } from "@/lib/event-time";
 
 export const calendarEventSchema = z.object({
   title:       z.string().min(1, "El título es requerido"),
-  event_date:  z.string(),
+  event_date:  z.string().min(1, "La fecha es requerida").transform(conHoraDeColombia),
   type:        z.enum(["event", "task", "deadline"]),
   description: z.string().optional().or(z.literal("")),
   status:      z.enum(["pending", "done"]),
