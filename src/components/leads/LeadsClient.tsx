@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { LEAD_STATUS, LEAD_STATUS_ORDER } from "@/lib/status-config";
 import type { Lead, LeadStatus } from "@/types";
 import { MemberBadges } from "@/components/shared/MemberTag";
+import { TEAM_MEMBERS, memberBySlug } from "@/lib/team";
 import { ContactTypeBadge } from "@/components/shared/ContactTypeTag";
 import { CONTACT_TYPES, type ContactType } from "@/lib/kpi";
 import { useMySlug } from "@/components/layout/SessionContext";
@@ -40,9 +41,16 @@ const FILTERS: { label: string; value: string }[] = [
   // Cómo fue el contacto — lo que mide el KPI de la quincena
   { label: "En frío",           value: "frio" },
   { label: "Con investigación", value: "investigado" },
-  // Míos = cualquiera de las tres etiquetas apunta a quien está mirando
-  { label: "Míos",           value: "mine" },
 ];
+
+/**
+ * Quién trabaja el lead: cualquiera de sus tres etiquetas (lo contactó, lo
+ * cerró o lo va a programar). Es un filtro aparte del de estado para poder
+ * cruzarlos — "los interesados de Camilo".
+ */
+function encargados(lead: Lead): (string | null)[] {
+  return [lead.contacted_by, lead.closed_by, lead.scheduled_by];
+}
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -60,6 +68,8 @@ export function LeadsClient({ initialLeads }: Props) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  // "all" | "mine" | el slug de un miembro del equipo
+  const [owner, setOwner] = useState("all");
   const [showForm, setShowForm] = useState(false);
   const [editLead, setEditLead] = useState<Lead | undefined>();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -71,17 +81,31 @@ export function LeadsClient({ initialLeads }: Props) {
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduleSaving, setScheduleSaving] = useState(false);
 
+  // El recorte por persona se aplica antes que todo lo demás: las tarjetas de
+  // arriba también responden a él, para poder preguntar "¿cómo van los de
+  // Camilo?" y no solo "¿cuáles son?".
+  const delEncargado = useMemo(
+    () =>
+      leads.filter((l) =>
+        owner === "all"  ? true :
+        owner === "mine" ? encargados(l).includes(mySlug) :
+        owner === "none" ? encargados(l).every((e) => !e) :
+        encargados(l).includes(owner)
+      ),
+    [leads, owner, mySlug]
+  );
+
   // KPIs
   const kpis = useMemo(() => {
-    const total = leads.length;
+    const total = delEncargado.length;
     const byStatus = STATUS_ORDER.reduce((acc, s) => {
-      acc[s] = leads.filter((l) => l.status === s).length;
+      acc[s] = delEncargado.filter((l) => l.status === s).length;
       return acc;
     }, {} as Record<LeadStatus, number>);
     const conversionRate = total > 0 ? Math.round((byStatus.converted / total) * 100) : 0;
     const interestRate   = total > 0 ? Math.round(((byStatus.qualified + byStatus.converted) / total) * 100) : 0;
     return { total, byStatus, conversionRate, interestRate };
-  }, [leads]);
+  }, [delEncargado]);
 
   function openSchedule(lead: Lead, e: React.MouseEvent) {
     e.stopPropagation();
@@ -153,13 +177,12 @@ export function LeadsClient({ initialLeads }: Props) {
     }
   }
 
-  const filtered = leads.filter((l) => {
+  const filtered = delEncargado.filter((l) => {
     const matchSearch = [l.name, l.company, l.phone, l.email].some(
       (v) => v?.toLowerCase().includes(search.toLowerCase())
     );
     const matchFilter =
       filter === "all"      ? true :
-      filter === "mine"     ? [l.contacted_by, l.closed_by, l.scheduled_by].includes(mySlug) :
       filter === "alta"     ? l.priority === "alta" :
       filter === "frio" || filter === "investigado" ? l.contact_type === filter :
       filter === "raul"     ? l.source === "raul" :
@@ -313,7 +336,9 @@ export function LeadsClient({ initialLeads }: Props) {
       {/* Tasa de conversión */}
       <div className="flex items-center gap-4 px-4 py-3 rounded-xl bg-card shadow-sm ring-1 ring-black/[0.05] dark:ring-white/[0.08]">
         <div className="text-center">
-          <p className="text-xs text-muted-foreground font-medium">Total leads</p>
+          <p className="text-xs text-muted-foreground font-medium">
+            {owner === "all" ? "Total leads" : "Leads del filtro"}
+          </p>
           <p className="text-lg font-bold text-foreground">{kpis.total}</p>
         </div>
         <div className="h-8 w-px bg-border" />
@@ -363,6 +388,37 @@ export function LeadsClient({ initialLeads }: Props) {
             {f.label}
           </button>
         ))}
+      </div>
+
+      {/* Encargado — es un filtro aparte del estado para poder cruzarlos */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mr-0.5">
+          Encargado
+        </span>
+        {[
+          { value: "all",  label: "Todos", dot: null as string | null },
+          ...(mySlug ? [{ value: "mine", label: "Míos", dot: memberBySlug(mySlug)?.dot ?? null }] : []),
+          ...TEAM_MEMBERS.filter((m) => m.slug !== mySlug).map((m) => ({
+            value: m.slug as string,
+            label: m.name,
+            dot: m.dot as string | null,
+          })),
+          { value: "none", label: "Sin asignar", dot: null as string | null },
+        ].map((o) => (
+          <button
+            key={o.value}
+            onClick={() => setOwner(o.value)}
+            className={cn(
+              "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 tracking-tight",
+              owner === o.value
+                ? "bg-foreground text-background shadow-sm"
+                : "bg-card text-muted-foreground hover:bg-muted shadow-sm ring-1 ring-border"
+            )}
+          >
+            {o.dot && <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", o.dot)} />}
+            {o.label}
+          </button>
+        ))}
         <span className="ml-auto text-xs text-muted-foreground font-medium">
           {filtered.length} lead{filtered.length !== 1 ? "s" : ""}
         </span>
@@ -371,7 +427,9 @@ export function LeadsClient({ initialLeads }: Props) {
       {/* Cards grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground text-sm font-medium">
-          {search || filter !== "all" ? "Sin resultados para esta búsqueda" : "No hay leads aún. ¡Crea el primero!"}
+          {search || filter !== "all" || owner !== "all"
+            ? "Sin resultados para esta búsqueda"
+            : "No hay leads aún. ¡Crea el primero!"}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
