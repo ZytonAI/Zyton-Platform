@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TEAM_MEMBERS, memberBySlug, type TeamSlug } from "@/lib/team";
@@ -74,23 +74,22 @@ export function ViewAsControl({ collapsed = false }: { collapsed?: boolean }) {
           </span>
         )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="right" className="w-56">
-        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-          Ver la plataforma como otra persona. Solo cambia lo que se muestra:
-          no entras a su cuenta ni ves sus cosas personales.
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {TEAM_MEMBERS.filter((m) => m.role !== "owner").map((m) => (
-          <DropdownMenuItem
-            key={m.slug}
-            disabled={cambiando || m.slug === viendoA}
-            onClick={() => elegir(m.slug)}
-          >
-            <span className={cn("w-2 h-2 rounded-full mr-2 shrink-0", m.dot)} />
-            <span className="flex-1 truncate">{m.name}</span>
-            <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[m.role]}</span>
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent align="start" side="right" className="w-60">
+        {/* El label es parte del grupo: Base UI lo exige (si no, error #31) */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Ver la plataforma como</DropdownMenuLabel>
+          {TEAM_MEMBERS.filter((m) => m.role !== "owner").map((m) => (
+            <DropdownMenuItem
+              key={m.slug}
+              disabled={cambiando || m.slug === viendoA}
+              onClick={() => elegir(m.slug)}
+            >
+              <span className={cn("w-2 h-2 rounded-full mr-2 shrink-0", m.dot)} />
+              <span className="flex-1 truncate">{m.name}</span>
+              <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[m.role]}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
         {viendo && (
           <>
             <DropdownMenuSeparator />
@@ -99,6 +98,10 @@ export function ViewAsControl({ collapsed = false }: { collapsed?: boolean }) {
             </DropdownMenuItem>
           </>
         )}
+        <DropdownMenuSeparator />
+        <p className="px-1.5 py-1 text-[11px] leading-snug text-muted-foreground">
+          Solo cambia lo que se muestra: no entras a su cuenta ni ves sus cosas personales.
+        </p>
       </DropdownMenuContent>
     </DropdownMenu>
   );

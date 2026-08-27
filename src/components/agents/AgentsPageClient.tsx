@@ -100,7 +100,7 @@ function RaulAgent() {
   }
 
   return (
-    <Card className="border-0 shadow-sm w-full max-w-xl">
+    <Card className="border-0 shadow-sm w-full">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-500/15 flex items-center justify-center">
@@ -178,9 +178,11 @@ function RaulAgent() {
 // ─── Main ─────────────────────────────────────────────────────
 export function AgentsPageClient() {
   return (
-    <div className="p-6 space-y-5 max-w-6xl">
+    // Raúl es lo único que queda en esta página: centrada se ve como una
+    // herramienta, y no como una columna huérfana pegada a la izquierda.
+    <div className="p-6 space-y-5 w-full max-w-xl mx-auto">
       <RaulAgent />
-      <p className="text-xs text-muted-foreground max-w-xl">
+      <p className="text-xs text-muted-foreground">
         Raúl busca negocios en Google Places y los guarda como leads nuevos, a nombre
         de quien se le indique. Desde ahí se trabajan en la sección Leads.
       </p>
