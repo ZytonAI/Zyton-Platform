@@ -1,4 +1,5 @@
 import type { TeamSlug } from "@/lib/team";
+import type { ContactType } from "@/lib/kpi";
 
 export type LeadStatus = "new" | "contacted" | "scheduled" | "qualified" | "lost" | "converted";
 
@@ -23,6 +24,10 @@ export interface Lead {
   maps_url: string | null;
   analyzed: boolean;
   priority: "alta" | "media" | "baja" | null;
+  /** Cómo fue el contacto: en frío o con investigación previa — KPI de la quincena */
+  contact_type: ContactType | null;
+  /** Cuándo se contactó; decide en qué quincena cae para el KPI */
+  contacted_at: string | null;
   /** Quién lo contactó */
   contacted_by: MemberTag;
   /** Quién lo cerró */
@@ -152,26 +157,9 @@ export interface AgentEvent {
   // Raúl
   leads?: Lead[];
   saved?: number;
-  // Elisa
-  analysis?: WebAnalysis;
-  html?: string;
   lead_id?: string;
-  report_url?: string;
   current?: number;
   total?: number;
-}
-
-export interface WebAnalysis {
-  nombre: string;
-  descripcion: string;
-  telefono: string | null;
-  email: string | null;
-  servicios: string[];
-  resumen: string;
-  puntaje_web: number;
-  velocidad: string;
-  metricas: { label: string; actual: number; benchmark: number }[];
-  oportunidades: string[];
 }
 
 export type InvoiceStatus = "pending" | "paid" | "overdue";

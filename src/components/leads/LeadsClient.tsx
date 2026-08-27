@@ -12,13 +12,15 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   Plus, Search, Phone, Globe, Building2,
   MoreHorizontal, Pencil, Trash2, Eye,
-  Bot, FileText, MessageCircle, Flame, CalendarClock, UserPlus,
+  Bot, FileText, MessageCircle, Flame, CalendarClock, UserPlus, Snowflake,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { LEAD_STATUS, LEAD_STATUS_ORDER } from "@/lib/status-config";
 import type { Lead, LeadStatus } from "@/types";
 import { MemberBadges } from "@/components/shared/MemberTag";
+import { ContactTypeBadge } from "@/components/shared/ContactTypeTag";
+import { CONTACT_TYPES, type ContactType } from "@/lib/kpi";
 import { useMySlug } from "@/components/layout/SessionContext";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +37,9 @@ const FILTERS: { label: string; value: string }[] = [
   { label: "No interesados", value: "lost" },
   { label: "Compraron",      value: "converted" },
   { label: "Alta prioridad", value: "alta" },
+  // Cómo fue el contacto — lo que mide el KPI de la quincena
+  { label: "En frío",           value: "frio" },
+  { label: "Con investigación", value: "investigado" },
   // Míos = cualquiera de las tres etiquetas apunta a quien está mirando
   { label: "Míos",           value: "mine" },
 ];
@@ -156,6 +161,7 @@ export function LeadsClient({ initialLeads }: Props) {
       filter === "all"      ? true :
       filter === "mine"     ? [l.contacted_by, l.closed_by, l.scheduled_by].includes(mySlug) :
       filter === "alta"     ? l.priority === "alta" :
+      filter === "frio" || filter === "investigado" ? l.contact_type === filter :
       filter === "raul"     ? l.source === "raul" :
       filter === "analyzed" ? l.analyzed :
       l.status === filter;
@@ -205,6 +211,28 @@ export function LeadsClient({ initialLeads }: Props) {
       });
       toast.info("Recordatorio de seguimiento creado para 5 días");
     }
+  }
+
+  /** La etiqueta de cómo fue el contacto — es lo que cuenta para el KPI */
+  async function handleChangeContactType(lead: Lead, contact_type: ContactType | null) {
+    const res = await fetch(`/api/leads/${lead.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contact_type }),
+    });
+    if (!res.ok) {
+      toast.error("Error etiquetando el contacto");
+      return;
+    }
+    const updated: Lead = await res.json();
+    // Sin la migración 022 la columna no existe y el guardado no hace nada:
+    // mejor decirlo que dejar creer que la etiqueta quedó puesta.
+    if (contact_type && updated.contact_type !== contact_type) {
+      toast.error("Falta correr la migración 022 en Supabase para etiquetar contactos");
+      return;
+    }
+    setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+    toast.success(contact_type ? `Contacto ${CONTACT_TYPES[contact_type].corto.toLowerCase()}` : "Etiqueta quitada");
   }
 
   const [convertingId, setConvertingId] = useState<string | null>(null);
@@ -404,6 +432,25 @@ export function LeadsClient({ initialLeads }: Props) {
                           })}
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          <Snowflake className="w-4 h-4 mr-2" />
+                          Contacto: {lead.contact_type ? CONTACT_TYPES[lead.contact_type].corto : "sin etiquetar"}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent>
+                          {(Object.keys(CONTACT_TYPES) as ContactType[]).map((t) => (
+                            <DropdownMenuItem key={t} onClick={() => handleChangeContactType(lead, t)}>
+                              <span className={cn("w-2 h-2 rounded-full mr-2 shrink-0", CONTACT_TYPES[t].dot)} />
+                              {CONTACT_TYPES[t].corto}
+                            </DropdownMenuItem>
+                          ))}
+                          {lead.contact_type && (
+                            <DropdownMenuItem onClick={() => handleChangeContactType(lead, null)}>
+                              Quitar etiqueta
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
                       {lead.status !== "converted" && lead.status !== "lost" && (
                         <DropdownMenuItem
                           onClick={() => handleConvert(lead)}
@@ -466,6 +513,7 @@ export function LeadsClient({ initialLeads }: Props) {
                 <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight", LEAD_STATUS[lead.status].badgeClass)}>
                   {LEAD_STATUS[lead.status].label}
                 </span>
+                <ContactTypeBadge value={lead.contact_type} />
                 {lead.source === "raul" && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-500 flex items-center gap-1 tracking-tight ring-1 ring-blue-100">
                     <Bot className="w-2.5 h-2.5" /> Raúl

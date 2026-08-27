@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth/session";
 import { canManageBilling } from "@/lib/permissions";
 import { TEAM_MEMBERS } from "@/lib/team";
 import { TopBar } from "@/components/layout/TopBar";
+import { KpiQuincena } from "@/components/dashboard/KpiQuincena";
+import { kpiPorPersona, quincenaActual, type LeadContactado } from "@/lib/kpi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,11 +116,12 @@ export default async function DashboardPage() {
   const showBilling = canManageBilling(role);
 
   const { now, eightWeeksAgo, sixMonthsAgoStr, in30days, todayStr, startOfTodayIso } = getDateRanges();
+  const quincena = quincenaActual();
 
   const [
     leadsRes, clientsRes, messagesRes, convertedRes,
     upcomingInvoicesRes, upcomingEventsRes,
-    recentLeadsRes, leadTagsRes, clientTagsRes,
+    recentLeadsRes, leadTagsRes, kpiLeadsRes, clientTagsRes,
     invoicesHistoryRes, expiringContractsRes, overdueRes,
   ] = await Promise.all([
     supabase
@@ -155,6 +158,13 @@ export default async function DashboardPage() {
       .limit(2000),
     // Etiquetas de equipo, para el corte por persona
     supabase.from("leads").select("status, contacted_by, closed_by").limit(5000),
+    // Contactos de la quincena en curso, para el KPI
+    supabase
+      .from("leads")
+      .select("contacted_by, contact_type")
+      .gte("contacted_at", quincena.desde)
+      .lt("contacted_at", quincena.hasta)
+      .limit(5000),
     supabase.from("clients").select("status, closed_by").limit(2000),
     supabase
       .from("invoices")
@@ -223,6 +233,14 @@ export default async function DashboardPage() {
     };
   });
   const hasTeamData = perMember.some((m) => m.contacted > 0 || m.won > 0 || m.clients > 0);
+
+  // ── Meta de la quincena ──
+  // Sin la migración 022 las columnas no existen y la query falla; el bloque
+  // se pinta igual, en ceros, con el aviso de que falta correrla.
+  const faltaKpiMigracion = !!kpiLeadsRes.error;
+  const kpiFilas = kpiPorPersona(
+    (faltaKpiMigracion ? [] : (kpiLeadsRes.data ?? [])) as LeadContactado[]
+  );
 
   const stats = [
     {
@@ -345,6 +363,9 @@ export default async function DashboardPage() {
             </Card>
           ))}
         </div>
+
+        {/* ── Meta de la quincena — la ven los cuatro ── */}
+        <KpiQuincena filas={kpiFilas} quincena={quincena} faltaMigracion={faltaKpiMigracion} />
 
         {/* ── Cómo va cada quien ── */}
         {hasTeamData && (

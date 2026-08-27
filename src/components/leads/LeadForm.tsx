@@ -14,6 +14,7 @@ import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import type { Lead } from "@/types";
 import { MemberSelect } from "@/components/shared/MemberTag";
+import { ContactTypeSelect } from "@/components/shared/ContactTypeTag";
 
 interface Props {
   open: boolean;
@@ -45,6 +46,7 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
       website: initialData?.website ?? "",
       maps_url: initialData?.maps_url ?? "",
       notes: initialData?.notes ?? "",
+      contact_type: initialData?.contact_type ?? null,
       contacted_by: initialData?.contacted_by ?? null,
       closed_by: initialData?.closed_by ?? null,
       scheduled_by: initialData?.scheduled_by ?? null,
@@ -66,6 +68,7 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
       website: initialData?.website ?? "",
       maps_url: initialData?.maps_url ?? "",
       notes: initialData?.notes ?? "",
+      contact_type: initialData?.contact_type ?? null,
       contacted_by: initialData?.contacted_by ?? null,
       closed_by: initialData?.closed_by ?? null,
       scheduled_by: initialData?.scheduled_by ?? null,
@@ -75,6 +78,7 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
   }, [open, initialData]);
 
   const status = watch("status");
+  const contactType = watch("contact_type");
   const contactedBy = watch("contacted_by");
   const closedBy = watch("closed_by");
   const scheduledBy = watch("scheduled_by");
@@ -196,6 +200,19 @@ export function LeadForm({ open, onClose, onSave, initialData }: Props) {
                 </SelectContent>
               </Select>
             </div>
+            {/* Tipo de contacto — es lo que mide el KPI de la quincena */}
+            <div className="col-span-2 space-y-1">
+              <Label>Tipo de contacto</Label>
+              <ContactTypeSelect
+                value={contactType}
+                onChange={(v) => setValue("contact_type", v)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                En frío = se le escribe sin mirar el negocio antes. Con investigación =
+                se revisó el negocio primero. La meta es 25 y 5 por quincena.
+              </p>
+            </div>
+
             {/* Etiquetas de equipo — quién hizo qué con este lead */}
             <div className="col-span-2 rounded-lg border p-3 space-y-3">
               <div>

@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "./SidebarContext";
 import { useRole } from "./SessionContext";
+import { ViewAsControl } from "./ViewAs";
 import { canAccessPath } from "@/lib/permissions";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
@@ -106,8 +107,10 @@ function SidebarNav({
         })}
       </nav>
 
-      {/* Pie: reducir la barra y cerrar sesión */}
+      {/* Pie: ver como otra persona, reducir la barra y cerrar sesión */}
       <div className="px-3 py-4 border-t border-sidebar-border shrink-0 space-y-0.5">
+        <ViewAsControl collapsed={collapsed} />
+
         {onToggleCollapsed && (
           <button
             onClick={onToggleCollapsed}

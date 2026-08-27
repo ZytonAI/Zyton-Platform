@@ -12,6 +12,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 El chat además tiene su propia etiqueta, `conversations.assigned_to` (migración 021), que manda sobre la del lead: un número que todavía no es lead también se puede repartir. Asignar desde el hilo escribe las dos cuando hay lead.
 
+**KPI de la quincena**: la meta es **30 contactos por persona cada quincena** — 25 en frío y 5 con investigación previa del negocio. Se mide con dos columnas de `leads` (migración 022): `contact_type` (`frio` | `investigado`, la etiqueta que se pone al contactar) y `contacted_at` (la fecha, que decide en qué quincena cae). La quincena va del 1 al 15 y del 16 a fin de mes, hora de Colombia; las cuentas y las metas viven en `src/lib/kpi.ts` y el bloque lo ven los cuatro en el Dashboard.
+
+`contacted_at` la pone sola la base: un trigger la sella la primera vez que el lead se etiqueta, se le asigna un `contacted_by` o cambia a un estado de contactado. Solo en UPDATE — Raúl inserta sus leads ya con `contacted_by` (quién los *va* a contactar), y eso no cuenta. La etiqueta se pone desde la ficha del lead, el menú de la tarjeta en la lista y el encabezado del chat de WhatsApp.
+
 **Calendario y Wiki**: cada evento y cada página es `team` (lo ve el equipo, default) o `personal` (solo quien lo creó, garantizado por RLS). Migraciones 018 y 019.
 
 **Quién hizo qué**: `owner_id` (creador) se traduce a persona con `src/lib/directory.ts` y se pinta en el historial, los adjuntos, los mensajes de WhatsApp salientes, la Wiki y las fichas. El contexto de sesión (`SessionContext`) lleva rol, slug propio y ese directorio.
@@ -34,6 +38,10 @@ Para un Socio Estratégico se oculta: el ítem **Facturas** del sidebar y la rut
 Se aplica en tres capas: UI (`RoleProvider` / `useIsOwner`), servidor (`src/lib/auth/session.ts` → `getSession`, `denyIfNotOwner`) y base (`profiles.role` + `is_owner()` + RLS de `invoices`, migración `017_roles.sql`). El rol de la app se deriva del email con `src/lib/team.ts`; quien no esté en esa lista entra como `partner`.
 
 Excepción conocida: `clients.billing_type` / `billing_amount` viven en la tabla compartida `clients` y RLS filtra filas, no columnas. La app las anula antes de mandarlas al navegador (`hideBilling` en `src/lib/client-billing.ts`), pero un Socio Estratégico que consultara Supabase directo con la anon key aún las vería. Cerrarlo del todo pide una vista sin esas columnas.
+
+**Ver como**: el Dueño puede mirar la plataforma con los ojos de un Socio Estratégico sin pedirle la contraseña a nadie — desplegable "Ver como" en el pie del menú lateral. Pone una cookie `zyton_view_as` (`src/lib/view-as.ts`) que `getSession` traduce a un `role` y un `member` prestados; `realRole` / `realMember` siguen siendo los suyos y son los que autorizan entrar y salir, así que una cookie puesta a mano por un Socio Estratégico no hace nada. Mientras dura hay una franja amarilla en todas las páginas.
+
+Es una vista de la **interfaz**: la sesión de Supabase sigue siendo la del Dueño, así que RLS y `owner_id` no cambian. Lo personal del otro (sus eventos privados del calendario, su historial de Diana) no se ve, y lo que se cree mientras tanto queda etiquetado a nombre de la persona prestada.
 
 **Login por usuario, no por email**: se entra con `SamuelZY`, `CamiloZY`, `SantiagoZY`, `DanielZY`. Supabase Auth guarda un email por debajo; `POST /api/auth/login` traduce usuario → email (vía `profiles.username`, con service role) y firma en el servidor.
 
@@ -103,8 +111,9 @@ src/
       clients/            # CRUD
       attachments/        # Upload a Supabase Storage
       diana/              # Chat de Diana, Telegram y cron de facturas
-      agents/             # Raúl, Elisa y Davoo
+      agents/             # Raúl (busca leads en Google Places)
       whatsapp/           # Proxy al WA service
+      view-as/            # El Dueño entra/sale de la vista de un Socio
   components/
     layout/Sidebar.tsx    # Navegación principal (filtrada por rol)
     layout/SessionContext.tsx # useRole / useIsOwner / useMySlug / useMemberById
@@ -113,6 +122,8 @@ src/
     ui/                   # Componentes shadcn/ui
   lib/
     team.ts               # Los 4 miembros (usuario, nombre, email, color, rol)
+    kpi.ts                # Meta de la quincena: 30 contactos (25 en frío, 5 investigados)
+    view-as.ts            # Cookie de la vista prestada del Dueño
     permissions.ts        # Roles owner/partner y qué puede ver cada uno
     auth/session.ts       # getSession / denyIfNotOwner para páginas y API
     cron.ts               # Tarea diaria de facturas (reemplaza al cron de Vercel)
@@ -144,7 +155,7 @@ supabase/migrations/      # SQL con schema y políticas RLS
 
 ## Estado
 
-Todo lo planeado está en producción: auth y roles, CRM de leads y clientes, facturas, calendario, wiki, tablero To Do, chat de WhatsApp y los agentes (Raúl, Elisa, Davoo) más Diana.
+Todo lo planeado está en producción: auth y roles, CRM de leads y clientes, facturas, calendario, wiki, tablero To Do, chat de WhatsApp, el agente Raúl y Diana.
 
 ## WhatsApp — cosas que muerden
 

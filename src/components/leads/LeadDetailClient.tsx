@@ -14,6 +14,7 @@ import { ArrowLeft, Pencil, Trash2, Star } from "lucide-react";
 import { toast } from "sonner";
 import type { Lead, HistoryEvent, FileAttachment } from "@/types";
 import { MemberBadges } from "@/components/shared/MemberTag";
+import { ContactTypeBadge } from "@/components/shared/ContactTypeTag";
 import { useMemberById } from "@/components/layout/SessionContext";
 
 interface Props {
@@ -99,6 +100,9 @@ export function LeadDetailClient({ lead: initialLead, history: initialHistory, a
               </div>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 -mb-1">
+                <ContactTypeBadge value={lead.contact_type} />
+              </div>
               <Field label="Email" value={lead.email} />
               <Field label="Teléfono" value={lead.phone} />
               <Field label="Empresa" value={lead.company} />

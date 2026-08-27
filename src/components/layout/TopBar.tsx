@@ -4,8 +4,8 @@ import { Menu } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useSidebar } from "./SidebarContext";
 import { ThemeToggle } from "./ThemeToggle";
-import { memberByEmail } from "@/lib/team";
-import { useRole } from "./SessionContext";
+import { memberByEmail, memberBySlug } from "@/lib/team";
+import { useRole, useViewingAs } from "./SessionContext";
 import { ROLE_LABELS } from "@/lib/permissions";
 
 interface TopBarProps {
@@ -16,7 +16,12 @@ interface TopBarProps {
 export function TopBar({ title, userEmail }: TopBarProps) {
   // Se entra con usuario, no con correo: mostrar el usuario del equipo
   // (SamuelZY, CamiloZY, …) y caer al email solo si no está en la lista.
-  const member = memberByEmail(userEmail);
+  //
+  // Con la vista prestada se muestra la identidad de la otra persona, que es
+  // justo lo que se quiere ver; la franja amarilla de arriba aclara de quién
+  // es la sesión de verdad.
+  const viewingAs = useViewingAs();
+  const member = memberBySlug(viewingAs) ?? memberByEmail(userEmail);
   const label = member?.username ?? userEmail;
   const initials = (member?.name ?? userEmail ?? "U")[0].toUpperCase();
   const { toggle } = useSidebar();

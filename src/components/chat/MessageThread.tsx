@@ -22,6 +22,7 @@ import { LEAD_STATUS, LEAD_STATUS_ORDER } from "@/lib/status-config";
 import type { Conversation, Message, FileAttachment } from "@/types";
 import { useMemberById } from "@/components/layout/SessionContext";
 import { MemberSelect } from "@/components/shared/MemberTag";
+import { CONTACT_TYPES, type ContactType } from "@/lib/kpi";
 import { memberBySlug } from "@/lib/team";
 import { cn } from "@/lib/utils";
 
@@ -124,6 +125,7 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
   const [attachSearch, setAttachSearch] = useState("");
   const [sendingFile, setSendingFile] = useState(false);
   const [leadStatus, setLeadStatus] = useState<LeadStatus | null>(null);
+  const [contactType, setContactType] = useState<ContactType | null>(null);
   const [uploading, setUploading] = useState(false);
   const [assigning, setAssigning] = useState(false);
   // La lista tarda un momento en refrescarse: el desplegable muestra ya lo elegido
@@ -167,8 +169,12 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
       if (conversation.lead_id) {
         const res = await fetch(`/api/leads/${conversation.lead_id}`);
         if (res.ok) {
-          const lead = await res.json();
-          if (lead?.status) { setLeadStatus(lead.status as LeadStatus); return; }
+          const { lead } = await res.json();
+          if (lead?.status) {
+            setLeadStatus(lead.status as LeadStatus);
+            setContactType((lead.contact_type as ContactType) ?? null);
+            return;
+          }
         }
       }
       // 2. Fallback: buscar por sufijo de teléfono
@@ -176,9 +182,12 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
       if (!suffix) return;
       const res = await fetch(`/api/leads?search=${suffix}`);
       if (!res.ok) return;
-      const leads: { id: string; phone?: string; status?: string }[] = await res.json();
+      const leads: { id: string; phone?: string; status?: string; contact_type?: string }[] = await res.json();
       const match = leads.find((l) => l.phone?.slice(-10) === suffix);
-      if (match?.status) setLeadStatus(match.status as LeadStatus);
+      if (match?.status) {
+        setLeadStatus(match.status as LeadStatus);
+        setContactType((match.contact_type as ContactType) ?? null);
+      }
     }
     loadLeadStatus().catch(() => {});
   }, [conversation.id, conversation.lead_id, conversation.contact_phone]);
@@ -223,25 +232,31 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
     }
   }
 
-  async function handleChangeLeadStatus(status: LeadStatus) {
-    let leadId = conversation.lead_id;
+  /**
+   * El lead de esta conversación. Si no viene vinculado se busca por el
+   * sufijo del teléfono y, si aparece, se deja vinculado para la próxima.
+   */
+  async function resolverLeadId(): Promise<string | null> {
+    if (conversation.lead_id) return conversation.lead_id;
 
-    // Si no tiene lead vinculado, buscar por sufijo de teléfono
-    if (!leadId) {
-      const suffix = conversation.contact_phone?.slice(-10);
-      if (!suffix) { toast.error("Sin lead vinculado a esta conversación"); return; }
-      const res = await fetch(`/api/leads?search=${suffix}`);
-      const leads: { id: string; phone?: string }[] = res.ok ? await res.json() : [];
-      const match = leads.find((l) => l.phone?.slice(-10) === suffix);
-      if (!match) { toast.error("No hay lead vinculado a esta conversación"); return; }
-      leadId = match.id;
-      // Vincular la conversación al lead encontrado
-      await fetch(`/api/whatsapp/conversations/${conversation.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lead_id: leadId }),
-      });
-    }
+    const suffix = conversation.contact_phone?.slice(-10);
+    if (!suffix) { toast.error("Sin lead vinculado a esta conversación"); return null; }
+    const res = await fetch(`/api/leads?search=${suffix}`);
+    const leads: { id: string; phone?: string }[] = res.ok ? await res.json() : [];
+    const match = leads.find((l) => l.phone?.slice(-10) === suffix);
+    if (!match) { toast.error("No hay lead vinculado a esta conversación"); return null; }
+
+    await fetch(`/api/whatsapp/conversations/${conversation.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_id: match.id }),
+    });
+    return match.id;
+  }
+
+  async function handleChangeLeadStatus(status: LeadStatus) {
+    const leadId = await resolverLeadId();
+    if (!leadId) return;
 
     const res = await fetch(`/api/leads/${leadId}`, {
       method: "PATCH",
@@ -252,6 +267,32 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
       setLeadStatus(status);
       toast.success(`Lead: ${LEAD_STATUS[status].label}`);
     }
+  }
+
+  /**
+   * Cómo fue este contacto: en frío o con investigación previa. Es lo que
+   * cuenta para el KPI de la quincena, y el chat es donde de verdad se
+   * contacta, así que se etiqueta desde aquí.
+   */
+  async function handleChangeContactType(contact_type: ContactType | null) {
+    const leadId = await resolverLeadId();
+    if (!leadId) return;
+
+    const res = await fetch(`/api/leads/${leadId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contact_type }),
+    });
+    if (!res.ok) { toast.error("Error etiquetando el contacto"); return; }
+
+    // Sin la migración 022 la columna no existe y el guardado no hace nada
+    const guardado = await res.json().catch(() => null);
+    if (contact_type && guardado && guardado.contact_type !== contact_type) {
+      toast.error("Falta correr la migración 022 en Supabase para etiquetar contactos");
+      return;
+    }
+    setContactType(contact_type);
+    toast.success(contact_type ? CONTACT_TYPES[contact_type].label : "Etiqueta quitada");
   }
 
   // Supabase Realtime para mensajes nuevos
@@ -490,6 +531,38 @@ export function MessageThread({ conversation, onBack, onReassigned }: Props) {
             disabled={assigning}
           />
         </div>
+
+        {/* Cómo fue el contacto — alimenta el KPI de la quincena */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={`hidden sm:flex shrink-0 items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border hover:opacity-80 outline-none transition-opacity ${
+              contactType
+                ? "bg-muted text-foreground border-border"
+                : "bg-muted text-muted-foreground border-border"
+            }`}
+          >
+            {contactType && (
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${CONTACT_TYPES[contactType].dot}`} />
+            )}
+            {contactType ? CONTACT_TYPES[contactType].corto : "Contacto"}
+            <ChevronDown className="w-3 h-3" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {(Object.keys(CONTACT_TYPES) as ContactType[])
+              .filter((t) => t !== contactType)
+              .map((t) => (
+                <DropdownMenuItem key={t} onClick={() => handleChangeContactType(t)}>
+                  <span className={`w-2 h-2 rounded-full mr-2 shrink-0 ${CONTACT_TYPES[t].dot}`} />
+                  {CONTACT_TYPES[t].corto}
+                </DropdownMenuItem>
+              ))}
+            {contactType && (
+              <DropdownMenuItem onClick={() => handleChangeContactType(null)}>
+                Quitar etiqueta
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Dropdown estado del lead — siempre visible */}
         <DropdownMenu>

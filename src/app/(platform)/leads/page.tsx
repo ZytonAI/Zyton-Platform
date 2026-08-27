@@ -10,10 +10,9 @@ export default async function LeadsPage() {
     supabase.from("leads").select("*").order("created_at", { ascending: false }).limit(1000),
   ]);
 
-  // Ocultar leads de Raúl que tienen web pero Elisa aún no ha generado su informe
-  const leads = (allLeads ?? []).filter(
-    (l) => l.source !== "raul" || l.analyzed || l.website === "Sin página web"
-  );
+  // Antes se escondían los leads de Raúl con web hasta que Elisa generara su
+  // informe. Elisa ya no existe, así que ese filtro solo los desaparecía.
+  const leads = allLeads ?? [];
 
   return (
     <>

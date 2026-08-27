@@ -171,22 +171,22 @@ const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "activate_agent",
       description:
-        "Activa uno de los agentes automatizados: Raúl (busca leads en Google Maps), Elisa (analiza webs de leads), Davoo (genera prompts de diseño web). La tarea corre en segundo plano y Diana te notificará cuando termine.",
+        "Activa a Raúl, que busca negocios en Google Maps y los guarda como leads. La tarea corre en segundo plano y Diana te notificará cuando termine.",
       parameters: {
         type: "object",
         properties: {
           agent: {
             type: "string",
-            enum: ["raul", "elisa", "davoo"],
+            enum: ["raul"],
             description: "Agente a activar",
           },
           tipo: {
             type: "string",
-            description: "Solo para Raúl: tipo de negocio a buscar (ej: 'dentistas')",
+            description: "Tipo de negocio a buscar (ej: 'dentistas')",
           },
           ciudad: {
             type: "string",
-            description: "Solo para Raúl: ciudad donde buscar (ej: 'Medellín Colombia')",
+            description: "Ciudad donde buscar (ej: 'Medellín Colombia')",
           },
         },
         required: ["agent"],
@@ -470,13 +470,13 @@ export async function runTool(
 
       case "activate_agent": {
         const agent = args.agent as string;
+        // Raúl es el único agente que queda; Elisa y Davoo se retiraron.
+        if (agent !== "raul") return `No existe un agente llamado "${agent}". El único es Raúl.`;
         const params: Record<string, string> = {};
-        if (agent === "raul") {
-          if (!args.tipo || !args.ciudad)
-            return "Para activar a Raúl necesito el tipo de negocio y la ciudad.";
-          params.tipo = args.tipo as string;
-          params.ciudad = args.ciudad as string;
-        }
+        if (!args.tipo || !args.ciudad)
+          return "Para activar a Raúl necesito el tipo de negocio y la ciudad.";
+        params.tipo = args.tipo as string;
+        params.ciudad = args.ciudad as string;
 
         // Guardar la tarea en diana_tasks (usando service role no disponible aquí, usamos anon con RLS)
         const { data: task, error: taskErr } = await supabase
@@ -490,8 +490,6 @@ export async function runTool(
         // Disparar el agente en background (fire & forget via fetch)
         const agentUrls: Record<string, string> = {
           raul: `${baseUrl}/api/agents/raul`,
-          elisa: `${baseUrl}/api/agents/elisa`,
-          davoo: `${baseUrl}/api/agents/davoo`,
         };
 
         // Llamamos al agente con el taskId para que pueda notificar cuando termine
@@ -503,8 +501,6 @@ export async function runTool(
 
         const agentNames: Record<string, string> = {
           raul: "Raúl",
-          elisa: "Elisa",
-          davoo: "Davoo",
         };
 
         return JSON.stringify({

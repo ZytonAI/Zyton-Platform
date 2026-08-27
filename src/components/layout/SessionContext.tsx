@@ -6,18 +6,24 @@ import { memberBySlug, type TeamMember, type TeamSlug } from "@/lib/team";
 import type { Directory } from "@/lib/directory";
 
 interface SessionValue {
-  /** Rol de quien está firmado */
+  /** Rol con el que se renderiza la app — el prestado si el Dueño está "viendo como" */
   role: Role;
-  /** Su slug del equipo (samuel, camilo, …) */
+  /** El slug del equipo con el que se renderiza (samuel, camilo, …) */
   slug: TeamSlug | null;
   /** owner_id → slug, para pintar quién hizo cada cosa */
   directory: Directory;
+  /** A quién está viendo el Dueño, o null si está en su propia vista */
+  viewingAs: TeamSlug | null;
+  /** El rol de verdad de quien está firmado — el que decide si puede "ver como" */
+  realRole: Role;
 }
 
 const SessionContext = createContext<SessionValue>({
   role: DEFAULT_ROLE,
   slug: null,
   directory: {},
+  viewingAs: null,
+  realRole: DEFAULT_ROLE,
 });
 
 /**
@@ -47,6 +53,23 @@ export function useRole(): Role {
 
 export function useIsOwner(): boolean {
   return isOwner(useContext(SessionContext).role);
+}
+
+/**
+ * A quién está viendo el Dueño con la vista prestada (src/lib/view-as.ts),
+ * o null si cada quien está en la suya.
+ */
+export function useViewingAs(): TeamSlug | null {
+  return useContext(SessionContext).viewingAs;
+}
+
+/**
+ * ¿Quien está firmado es el Dueño de verdad? Es lo que decide quién puede
+ * entrar y salir de la vista de otra persona — `useIsOwner` responde por el
+ * rol prestado, que mientras tanto es el del Socio Estratégico.
+ */
+export function useIsRealOwner(): boolean {
+  return isOwner(useContext(SessionContext).realRole);
 }
 
 /** Slug de quien está firmado — null si su email no está en el equipo. */
