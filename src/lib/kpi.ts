@@ -105,11 +105,14 @@ export function quincenaActual(ahora: Date = new Date()): Quincena {
 
 export interface FilaKpi {
   member: TeamMember;
-  /** Contactos de la quincena, con etiqueta o sin ella */
+  /** Lo que cuenta para la meta: solo los contactos etiquetados */
   total: number;
   frio: number;
   investigado: number;
-  /** Contactados pero sin etiquetar: no se pueden repartir entre las metas */
+  /**
+   * Contactados en la quincena a los que no les pusieron etiqueta. NO suman
+   * para la meta — están aquí para avisar que falta clasificarlos.
+   */
   sinEtiqueta: number;
   /** Avance sobre los 30, tope 100 */
   pct: number;
@@ -122,25 +125,28 @@ export interface LeadContactado {
 }
 
 /**
- * Cuántos contactos lleva cada quien en la quincena. Los leads sin
- * `contacted_by` no son de nadie, así que no suman para ninguna meta.
+ * Cuántos contactos lleva cada quien en la quincena.
+ *
+ * Lo que cuenta es la ETIQUETA, no la fecha: un contacto sin etiquetar no
+ * suma ni en el total ni en ninguna de las dos metas, así que quitarle la
+ * etiqueta a un lead lo descuenta de las dos cuentas a la vez. Los leads sin
+ * `contacted_by` no son de nadie y no suman para ninguna meta.
  */
 export function kpiPorPersona(leads: LeadContactado[]): FilaKpi[] {
   return TEAM_MEMBERS.map((member) => {
     const suyos = leads.filter((l) => l.contacted_by === member.slug);
     const frio = suyos.filter((l) => l.contact_type === "frio").length;
     const investigado = suyos.filter((l) => l.contact_type === "investigado").length;
+    const total = frio + investigado;
     return {
       member,
-      total: suyos.length,
+      total,
       frio,
       investigado,
-      sinEtiqueta: suyos.length - frio - investigado,
-      pct: Math.min(100, Math.round((suyos.length / META_QUINCENA.total) * 100)),
+      sinEtiqueta: suyos.length - total,
+      pct: Math.min(100, Math.round((total / META_QUINCENA.total) * 100)),
       cumplido:
-        suyos.length >= META_QUINCENA.total &&
-        investigado >= META_QUINCENA.investigado &&
-        frio >= META_QUINCENA.frio,
+        investigado >= META_QUINCENA.investigado && frio >= META_QUINCENA.frio,
     };
   });
 }

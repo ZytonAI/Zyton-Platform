@@ -125,8 +125,11 @@ export function EquipoPanel({
                 </div>
 
                 {sinEtiqueta > 0 && (
-                  <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                    {sinEtiqueta} sin etiquetar
+                  <p
+                    className="text-[10px] text-amber-600 dark:text-amber-400 font-medium"
+                    title="Contactados pero sin clasificar como en frío o con investigación. Hasta que se etiqueten no suman para la meta."
+                  >
+                    {sinEtiqueta} sin etiquetar · no cuentan
                   </p>
                 )}
 

@@ -14,7 +14,9 @@ El chat además tiene su propia etiqueta, `conversations.assigned_to` (migració
 
 **KPI de la quincena**: la meta es **30 contactos por persona cada quincena** — 25 en frío y 5 con investigación previa del negocio. Se mide con dos columnas de `leads` (migración 022): `contact_type` (`frio` | `investigado`, la etiqueta que se pone al contactar) y `contacted_at` (la fecha, que decide en qué quincena cae). La quincena va del 1 al 15 y del 16 a fin de mes, hora de Colombia; las cuentas y las metas viven en `src/lib/kpi.ts` y el bloque lo ven los cuatro en el Dashboard.
 
-`contacted_at` la pone sola la base: un trigger la sella la primera vez que el lead se etiqueta, se le asigna un `contacted_by` o cambia a un estado de contactado. Solo en UPDATE — Raúl inserta sus leads ya con `contacted_by` (quién los *va* a contactar), y eso no cuenta. La etiqueta se pone desde la ficha del lead, el menú de la tarjeta en la lista y el encabezado del chat de WhatsApp.
+Lo que cuenta para la meta es la **etiqueta**, no la fecha: un contacto sin `contact_type` no suma ni en el total ni en ninguna de las dos sub-metas, solo aparece como "sin etiquetar · no cuentan". Así, quitarle la etiqueta a un lead lo descuenta de las dos cuentas a la vez.
+
+`contacted_at` la pone sola la base con un trigger. La etiqueta manda sobre ella: ponerla la sella, quitarla la borra (migración 023), de forma que volver a etiquetar más adelante cae en la quincena en la que se etiquetó y no en la vieja. Asignarle un `contacted_by` o moverlo a un estado de contactado también la sellan cuando está vacía — son los que hacen que el lead salga como "sin etiquetar". Solo en UPDATE: Raúl inserta sus leads ya con `contacted_by` (quién los *va* a contactar), y eso no cuenta. La etiqueta se pone desde la ficha del lead, el menú de la tarjeta en la lista y el encabezado del chat de WhatsApp.
 
 **Calendario y Wiki**: cada evento y cada página es `team` (lo ve el equipo, default) o `personal` (solo quien lo creó, garantizado por RLS). Migraciones 018 y 019.
 
