@@ -49,10 +49,9 @@ export async function DELETE(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Verificar que la conversación pertenece al usuario
   const { data: conv } = await supabase
     .from("conversations")
-    .select("id")
+    .select("id, lead_id")
     .eq("id", id)
     .single();
 
@@ -61,6 +60,19 @@ export async function DELETE(
   // Eliminar mensajes y luego la conversación
   await supabase.from("messages").delete().eq("conversation_id", id);
   await supabase.from("conversations").delete().eq("id", id);
+
+  // Borrar el chat borra también la etiqueta de cómo fue el contacto: si no
+  // queda rastro de la conversación, no hay contacto que contar en el KPI de
+  // la quincena. `contacted_by` se queda — es quién trabaja el lead, y el
+  // lead sigue en el CRM.
+  if (conv.lead_id) {
+    const { error } = await withColumnFallback(
+      { contact_type: null, contacted_at: null },
+      (row) => supabase.from("leads").update(row).eq("id", conv.lead_id!).select().single()
+    );
+    // Que no se pueda limpiar la etiqueta no debe hacer fallar el borrado
+    if (error) console.error("[chat] no se pudo limpiar la etiqueta del lead:", error.message);
+  }
 
   return NextResponse.json({ success: true });
 }
