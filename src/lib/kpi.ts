@@ -1,4 +1,5 @@
 import { TEAM_MEMBERS, type TeamMember, type TeamSlug } from "@/lib/team";
+import { fechaHoyColombia } from "@/lib/event-time";
 
 /**
  * KPI comercial: 30 contactos por persona cada quincena.
@@ -40,7 +41,6 @@ export const CONTACT_TYPE_VALUES = Object.keys(CONTACT_TYPES) as [ContactType, .
 // Del 1 al 15 y del 16 a fin de mes, hora de Colombia. Colombia no tiene
 // horario de verano, así que el desfase es siempre -05:00.
 const OFFSET_COLOMBIA = "-05:00";
-const ZONA_COLOMBIA = "America/Bogota";
 
 const MESES = [
   "ene", "feb", "mar", "abr", "may", "jun",
@@ -49,15 +49,7 @@ const MESES = [
 
 /** Y/M/D tal como se ven en Colombia, sin importar dónde corra el servidor. */
 function hoyEnColombia(ahora: Date): { anio: number; mes: number; dia: number } {
-  const [anio, mes, dia] = new Intl.DateTimeFormat("en-CA", {
-    timeZone: ZONA_COLOMBIA,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-    .format(ahora)
-    .split("-")
-    .map(Number);
+  const [anio, mes, dia] = fechaHoyColombia(ahora).split("-").map(Number);
   return { anio, mes, dia };
 }
 

@@ -18,6 +18,8 @@ Lo que cuenta para la meta es la **etiqueta**, no la fecha: un contacto sin `con
 
 `contacted_at` la pone sola la base con un trigger. La etiqueta manda sobre ella: ponerla la sella, quitarla la borra (migración 023), de forma que volver a etiquetar más adelante cae en la quincena en la que se etiquetó y no en la vieja. Asignarle un `contacted_by` o moverlo a un estado de contactado también la sellan cuando está vacía — son los que hacen que el lead salga como "sin etiquetar". Solo en UPDATE: Raúl inserta sus leads ya con `contacted_by` (quién los *va* a contactar), y eso no cuenta. La etiqueta se pone desde la ficha del lead, el menú de la tarjeta en la lista y el encabezado del chat de WhatsApp. Borrar un chat borra la etiqueta y la fecha del lead vinculado: sin conversación no hay contacto que contar (`contacted_by` se queda, que es otra cosa).
 
+**Tablero To Do**: una tarea completada se borra sola el día siguiente a su fecha — el día de la fecha sigue a la vista aunque ya esté hecha. La limpieza (`src/lib/task-cleanup.ts`) corre al abrir el tablero y en `GET /api/tasks`, no en un cron: solo importa que no estén cuando alguien mira. Las que no se completaron se quedan y se pintan con fondo rojo claro. Las tareas sin fecha nunca se borran solas.
+
 **Calendario y Wiki**: cada evento y cada página es `team` (lo ve el equipo, default) o `personal` (solo quien lo creó, garantizado por RLS). Migraciones 018 y 019.
 
 **Quién hizo qué**: `owner_id` (creador) se traduce a persona con `src/lib/directory.ts` y se pinta en el historial, los adjuntos, los mensajes de WhatsApp salientes, la Wiki y las fichas. El contexto de sesión (`SessionContext`) lleva rol, slug propio y ese directorio.
@@ -99,7 +101,7 @@ src/
     (platform)/           # Rutas con sidebar — require auth
       layout.tsx          # Valida sesión server-side, muestra Sidebar
       dashboard/
-      todo/               # Tablero de tareas por persona
+      todo/               # Tablero de tareas por persona (limpia las cumplidas al abrirse)
       leads/
       clients/
       chat/
@@ -131,6 +133,7 @@ src/
     cron.ts               # Tarea diaria de facturas (reemplaza al cron de Vercel)
     conversation-scope.ts # Qué chats de WhatsApp le tocan a cada persona
     directory.ts          # owner_id → miembro del equipo
+    task-cleanup.ts       # Borra las tareas completadas al día siguiente de su fecha
     concurrency.ts        # 409 si dos personas editan el mismo registro
     notify-member.ts      # Avisos de "te asignaron esto" por Telegram
     pg-compat.ts          # Reintenta sin la columna si falta la migración

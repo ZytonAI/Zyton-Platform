@@ -11,6 +11,7 @@
 
 /** Colombia no cambia de hora con las estaciones, así que el huso es fijo. */
 const HORA_COLOMBIA = "-05:00";
+const ZONA_COLOMBIA = "America/Bogota";
 const SIN_ZONA = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
 
 /**
@@ -40,4 +41,21 @@ export function splitDateTime(valor: string): { date: string; time: string } {
     date: `${d.getFullYear()}-${dosCifras(d.getMonth() + 1)}-${dosCifras(d.getDate())}`,
     time: `${dosCifras(d.getHours())}:${dosCifras(d.getMinutes())}`,
   };
+}
+
+/**
+ * Qué día es hoy en Colombia, como "YYYY-MM-DD".
+ *
+ * Hace falta porque el servidor corre en UTC: a las 20:00 de Colombia allá ya
+ * es el día siguiente, y comparar contra una columna DATE con la fecha del
+ * servidor adelantaría un día todo lo que dependa de "hoy". Sirve igual en el
+ * navegador, así que cliente y servidor coinciden.
+ */
+export function fechaHoyColombia(ahora: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: ZONA_COLOMBIA,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(ahora);
 }

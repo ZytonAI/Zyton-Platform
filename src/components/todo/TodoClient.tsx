@@ -24,6 +24,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
+import { fechaHoyColombia } from "@/lib/event-time";
 import type { Task, TaskStatus } from "@/types";
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; chip: string; Icon: typeof Circle }> = {
@@ -33,11 +34,6 @@ const STATUS_CONFIG: Record<TaskStatus, { label: string; chip: string; Icon: typ
 };
 
 const STATUS_ORDER: TaskStatus[] = ["todo", "in_progress", "done"];
-
-function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function formatDue(date: string): string {
   return new Date(`${date}T12:00`).toLocaleDateString("es-ES", {
@@ -49,9 +45,11 @@ function formatDue(date: string): string {
 interface Props {
   initialTasks: Task[];
   userEmail?: string;
+  /** Cuántas tareas completadas se borraron solas al abrir el tablero */
+  purgadas?: number;
 }
 
-export function TodoClient({ initialTasks, userEmail }: Props) {
+export function TodoClient({ initialTasks, userEmail, purgadas = 0 }: Props) {
   const [tasks, setTasks]         = useState<Task[]>(initialTasks);
   const [search, setSearch]       = useState("");
   const [hideDone, setHideDone]   = useState(false);
@@ -64,7 +62,7 @@ export function TodoClient({ initialTasks, userEmail }: Props) {
   const [dragOver, setDragOver] = useState<TeamSlug | null>(null);
 
   const me = memberByEmail(userEmail);
-  const today = todayKey();
+  const today = fechaHoyColombia();
 
   const byMember = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -176,6 +174,14 @@ export function TodoClient({ initialTasks, userEmail }: Props) {
           <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:block">
             {done} de {total} completadas
           </span>
+          {purgadas > 0 && (
+            <span
+              className="text-xs text-muted-foreground whitespace-nowrap hidden md:block"
+              title="Una tarea completada se borra sola el día siguiente a su fecha."
+            >
+              · {purgadas} completada{purgadas !== 1 ? "s" : ""} se {purgadas !== 1 ? "borraron" : "borró"} sola{purgadas !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -244,9 +250,11 @@ export function TodoClient({ initialTasks, userEmail }: Props) {
                         draggable
                         onDragStart={() => { draggedId.current = task.id; }}
                         onDragEnd={() => setDragOver(null)}
-                        className={`group rounded-lg border bg-white px-3 py-2.5 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing ${
-                          task.status === "done" ? "opacity-60" : ""
-                        }`}
+                        className={`group rounded-lg border px-3 py-2.5 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing ${
+                          overdue
+                            ? "bg-red-50 border-red-200 dark:bg-red-500/10 dark:border-red-500/30"
+                            : "bg-white"
+                        } ${task.status === "done" ? "opacity-60" : ""}`}
                       >
                         <div className="flex items-start gap-2">
                           <p
