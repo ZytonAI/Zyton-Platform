@@ -13,16 +13,35 @@ export function normalizePhone(raw: string): string {
 }
 
 /**
+ * ¿Estos 10 dígitos son un número colombiano sin código de país?
+ *
+ * En Colombia los móviles empiezan por 3 (3XX XXX XXXX) y los fijos por 60
+ * (60X XXX XXXX). Cualquier otro número de 10 dígitos es de otro país — un
+ * `(214) 571-4553` de Estados Unidos, por ejemplo.
+ */
+function pareceColombianoSinPais(digits: string): boolean {
+  return digits.length === 10 && (digits.startsWith("3") || digits.startsWith("60"));
+}
+
+/**
  * Convierte un teléfono a wa_chat_id canónico (`<dígitos>@c.us`).
- * Los números locales de 10 dígitos o menos reciben el código de país
- * por defecto, para que coincidan con lo que reporta WhatsApp.
+ *
+ * El `+`, los espacios y los paréntesis se pierden por el camino: WhatsApp
+ * direcciona con dígitos pelados, así que da igual cómo esté escrito.
+ *
+ * El código de país solo se añade cuando el número de verdad parece
+ * colombiano. Antes se le ponía a cualquier cosa de 10 dígitos o menos, y eso
+ * convertía un número extranjero en uno colombiano **válido pero de otra
+ * persona**: `(214) 571-4553` (Dallas) salía como `572145714553`, y ese
+ * mensaje se le habría ido a un desconocido. Es mejor que WhatsApp diga que
+ * el número no existe a mandarle el mensaje a quien no es.
  */
 export function toWaChatId(phone: string): string {
-  let digits = normalizePhone(phone);
-  if (digits.length <= 10 && !digits.startsWith(DEFAULT_COUNTRY_CODE)) {
-    digits = `${DEFAULT_COUNTRY_CODE}${digits}`;
-  }
-  return `${digits}@c.us`;
+  const digits = normalizePhone(phone);
+  const conPais = pareceColombianoSinPais(digits)
+    ? `${DEFAULT_COUNTRY_CODE}${digits}`
+    : digits;
+  return `${conPais}@c.us`;
 }
 
 /**
