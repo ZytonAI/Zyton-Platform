@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { withColumnFallback } from "@/lib/pg-compat";
-import { sendBridgeMessage } from "@/lib/wa-bridge";
+import { mensajeDeErrorLegible, sendBridgeMessage } from "@/lib/wa-bridge";
 import { sendMessageSchema } from "@/lib/validations/chat.schema";
 import { NextResponse } from "next/server";
 
@@ -96,7 +96,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(msg, { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Error enviando mensaje";
+    const crudo = err instanceof Error ? err.message : "Error enviando mensaje";
+    console.error("[whatsapp] fallo al enviar:", crudo);
+    const message = mensajeDeErrorLegible(crudo);
 
     // Persistir el intento como "failed" para que no desaparezca de la UI
     // y el usuario pueda reintentar desde la burbuja

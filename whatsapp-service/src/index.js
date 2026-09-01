@@ -227,6 +227,94 @@ async function resolverTelefono(chatId, contact) {
   return crudo;
 }
 
+// ── A quién se le manda ───────────────────────────────────
+// WhatsApp está migrando de identificar a la gente por su número (`@c.us`) a
+// hacerlo por un identificador interno (`@lid`). En una cuenta ya migrada,
+// pedirle que mande a `<numero>@c.us` puede reventar dentro de WhatsApp Web
+// con "No LID for user ...": el número existe, pero no hay forma de traducirlo
+// al identificador con el que de verdad se direcciona el mensaje.
+//
+// El destino bueno es el `@lid`. Se busca por tres caminos, del más barato al
+// más caro, y si ninguno da se manda al número como siempre.
+
+/** teléfono (solo dígitos) → `<lid>@lid`, aprendido de los mensajes que entran. */
+const lidPorTelefono = new Map();
+
+/** Cada mensaje que llega de un `@lid` nos enseña el par lid↔teléfono. */
+function recordarLid(chatId, phone) {
+  if (chatId?.endsWith("@lid") && phone) lidPorTelefono.set(phone, chatId);
+}
+
+/** ¿El error es de direccionamiento? Solo entonces vale la pena reintentar. */
+function esErrorDeDireccion(err) {
+  return /lid|wid|jid|not.*(exist|found)/i.test(err?.message ?? "");
+}
+
+/** El `@lid` del contacto, si se puede averiguar. null si no. */
+async function lidDe(to) {
+  if (to.endsWith("@lid")) return to;
+  const phone = to.replace(/@.*$/, "");
+
+  const aprendido = lidPorTelefono.get(phone);
+  if (aprendido) return aprendido;
+
+  if (typeof client.getContactLidAndPhone === "function") {
+    try {
+      const [info] = await client.getContactLidAndPhone([to]);
+      // Puede tirar el mismo "No LID for user": por eso va en try/catch
+      if (info?.lid) {
+        lidPorTelefono.set(phone, info.lid);
+        return info.lid;
+      }
+    } catch (err) {
+      console.warn(`No se pudo resolver el LID de ${to}: ${err.message}`);
+    }
+  }
+
+  try {
+    // Consulta de existencia pura; no pasa por la traducción a LID, así que
+    // no puede fallar por lo mismo. En una cuenta migrada suele devolver el lid.
+    const wid = await client.getNumberId(phone);
+    const serializado = wid?._serialized;
+    if (serializado && serializado !== to) {
+      lidPorTelefono.set(phone, serializado);
+      return serializado;
+    }
+  } catch (err) {
+    console.warn(`getNumberId falló para ${phone}: ${err.message}`);
+  }
+
+  return null;
+}
+
+/**
+ * Manda el mensaje al mejor destino que se conozca y, si el fallo es de
+ * direccionamiento, lo reintenta una sola vez con la otra forma.
+ *
+ * Un solo reintento y solo ante un error de dirección, a propósito: si el
+ * mensaje llegó a salir antes de reventar, reintentar lo mandaría dos veces.
+ */
+async function enviarMensaje(to, contenido, opciones) {
+  const lid = await lidDe(to);
+  const orden = lid && lid !== to ? [lid, to] : [to];
+
+  let ultimoError;
+  for (let i = 0; i < orden.length; i++) {
+    const destino = orden[i];
+    try {
+      const sent = await client.sendMessage(destino, contenido, opciones);
+      if (destino !== to) console.log(`Enviado a ${to} direccionando a ${destino}`);
+      return sent;
+    } catch (err) {
+      ultimoError = err;
+      console.warn(`Envío a ${destino} falló: ${err.message}`);
+      // Un error que no es de dirección no se arregla cambiando de destino
+      if (!esErrorDeDireccion(err)) break;
+    }
+  }
+  throw ultimoError;
+}
+
 // ── Reenvío de mensajes al webhook (entrantes y propios) ──
 async function forwardIncomingMessage(msg) {
   // En un mensaje propio el contacto está en `to`; en uno entrante, en `from`
@@ -248,6 +336,9 @@ async function forwardIncomingMessage(msg) {
     : await msg.getContact().catch(() => null);
   const contactName = contact?.pushname || contact?.name || null;
   const contactPhone = await resolverTelefono(chatId, contact);
+  // Quien nos escribe desde un @lid nos está enseñando su par lid↔teléfono:
+  // es la fuente más fiable para saber a dónde responderle.
+  recordarLid(chatId, contactPhone);
 
   const payload = {
     type: "message",
@@ -410,7 +501,7 @@ app.post("/send", async (req, res) => {
     return res.status(503).json({ error: "WhatsApp no está conectado" });
   }
   try {
-    const sent = await client.sendMessage(to, body);
+    const sent = await enviarMensaje(to, body);
     // El mensaje sale igual, pero WhatsApp no siempre devuelve el objeto del
     // mensaje recién enviado (pasa en los chats @lid). Sin id la plataforma
     // lo reconcilia con el evento message_create, así que no se pierde nada.
@@ -443,7 +534,7 @@ app.post("/send-file", async (req, res) => {
     }
 
     const media = new MessageMedia(fileMime, fileBase64, finalName);
-    const sent = await client.sendMessage(to, media, {
+    const sent = await enviarMensaje(to, media, {
       sendMediaAsDocument: !fileMime.startsWith("image/") && !fileMime.startsWith("video/"),
     });
     const waMessageId = messageId(sent);

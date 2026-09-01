@@ -23,6 +23,25 @@ async function bridgeFetch(path: string, options: RequestInit = {}) {
   return res;
 }
 
+/**
+ * Los errores que salen de dentro de WhatsApp Web llegan crudos, con su URL
+ * del bundle detrás ("No LID for user s (https://static.whatsapp.net/...)").
+ * Eso no le dice nada a nadie, y era lo que aparecía en la burbuja del chat.
+ */
+export function mensajeDeErrorLegible(raw: string): string {
+  if (/no lid for user/i.test(raw)) {
+    return "WhatsApp no pudo resolver a quién mandarle el mensaje. Suele arreglarse si el contacto escribe primero; si sigue, reconecta la sesión.";
+  }
+  if (/no está conectado|not connected/i.test(raw)) {
+    return "WhatsApp no está conectado. Escanea el QR desde el chat.";
+  }
+  if (/no se pudo contactar el bridge/i.test(raw)) {
+    return "El servicio de WhatsApp no responde. Revisa que esté arriba en EasyPanel.";
+  }
+  // Lo que no reconocemos se muestra igual, pero sin la URL del bundle detrás
+  return raw.replace(/\s*\(https?:\/\/[^)]*\)/g, "").trim() || "Error enviando mensaje";
+}
+
 export async function getBridgeStatus() {
   const res = await bridgeFetch("/status");
   if (!res.ok) throw new Error(`Bridge error ${res.status}`);
