@@ -170,9 +170,11 @@ Todo lo planeado está en producción: auth y roles, CRM de leads y clientes, fa
 
 **`@lid` no es un teléfono.** Los chats nuevos llegan identificados como `269152866533531@lid`. El bridge lo traduce con `getContactLidAndPhone` y el webhook cura las conversaciones viejas (teléfono real + vínculo al lead) cuando entra el siguiente mensaje.
 
-## whatsapp-service — ojo
+## whatsapp-service — de dónde se despliega
 
-La carpeta `whatsapp-service/` está versionada en **dos repos a la vez**: en este, y en su propio repo (`ZytonAI/whatsapp-service-`, que es el que EasyPanel despliega). Las dos copias ya divergieron. Antes de tocar el WA service, confirmar en cuál de los dos se está trabajando.
+EasyPanel despliega el WA service desde **este** repo, carpeta `whatsapp-service/`: subir a `main` es todo lo que hace falta, el despliegue sale solo.
+
+Existe además un repo aparte (`ZytonAI/whatsapp-service-`) con una copia vieja y divergida de la misma carpeta. No es el que corre en producción — no hay que portarle nada ni tomarlo como referencia.
 
 ## Usuarios del equipo
 
