@@ -137,6 +137,7 @@ src/
     concurrency.ts        # 409 si dos personas editan el mismo registro
     notify-member.ts      # Avisos de "te asignaron esto" por Telegram
     pg-compat.ts          # Reintenta sin la columna si falta la migración
+    wa-destino.ts         # Resuelve y guarda el @lid de un chat en el primer envío
     wa-session.ts         # Sesión de WhatsApp del workspace (una sola)
     supabase/client.ts    # Browser client (anon key)
     supabase/server.ts    # Server client (cookies)
@@ -170,7 +171,7 @@ Todo lo planeado está en producción: auth y roles, CRM de leads y clientes, fa
 
 **`@lid` no es un teléfono, y ya es la dirección principal.** A la misma persona WhatsApp la identifica de dos formas: `573104163897@c.us` (el teléfono, que es lo que crea el CRM al abrir el chat desde un lead) y `52162478518357@lid` (el identificador interno, que es lo que llega cuando esa persona escribe). En una cuenta ya migrada **mandar al `@c.us` revienta** con "No LID for user".
 
-Por eso `conversations.wa_lid` (migración 024) guarda el `@lid` y es a donde se envía (`destinoDe` en `src/lib/wa-bridge.ts`); sin él se cae al `wa_chat_id` de siempre. El webhook lo guarda cuando el mensaje llega de un `@lid`, y `POST /api/whatsapp/conversations` se lo pregunta al bridge (`/resolve`) al abrir el chat — que es lo que permite escribirle a alguien **de cero**, sin que haya escrito antes.
+Por eso `conversations.wa_lid` (migración 024) guarda el `@lid` y es a donde se envía (`destinoDe` en `src/lib/wa-bridge.ts`); sin él se cae al `wa_chat_id` de siempre. El webhook lo guarda cuando el mensaje llega de un `@lid`, y `POST /api/whatsapp/conversations` se lo pregunta al bridge (`/resolve`) al abrir el chat — que es lo que permite escribirle a alguien **de cero**, sin que haya escrito antes. Los chats que ya existían sin `wa_lid` se curan solos: `src/lib/wa-destino.ts` lo resuelve y lo guarda en el primer envío, así que el costo es de una vez por chat.
 
 **El orden de la resolución importa.** `getContactLidAndPhone` termina en `getCurrentLid(wid)`, que *lanza* en vez de devolver vacío cuando WhatsApp nunca consultó a ese contacto — y como lanza, la propia librería nunca llega a su plan B. El bridge hace ese plan B primero: `getNumberId` (que dispara `queryWidExists` y mete al contacto en la caché de WhatsApp) y recién después pide el LID. Ese era exactamente el caso del primer mensaje a un desconocido.
 

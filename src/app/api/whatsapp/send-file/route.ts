@@ -1,7 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withColumnFallback } from "@/lib/pg-compat";
-import { destinoDe, mensajeDeErrorLegible, sendBridgeFile } from "@/lib/wa-bridge";
+import { mensajeDeErrorLegible, sendBridgeFile } from "@/lib/wa-bridge";
+import { resolverDestinoConversacion } from "@/lib/wa-destino";
 import { sendFileSchema } from "@/lib/validations/chat.schema";
 import { NextResponse } from "next/server";
 
@@ -101,8 +102,18 @@ export async function POST(request: Request) {
   const sentMediaType = isHtml ? "application/pdf" : (attachment.content_type ?? "application/octet-stream");
   const sentMediaUrl = isHtml || !attachment.storage_path ? null : `attachments/${attachment.storage_path}`;
 
+  // Los chats abiertos desde un lead se guardaron con `<telefono>@c.us`, que es
+  // lo que WhatsApp ya no acepta: aquí se resuelve su `@lid` y se guarda.
+  const { destino, sinWhatsapp } = await resolverDestinoConversacion(supabase, conv);
+  if (sinWhatsapp) {
+    return NextResponse.json(
+      { error: `El número ${conv.contact_phone ?? ""} no tiene WhatsApp. Revísalo en la ficha del lead.`.replace("  ", " ") },
+      { status: 400 }
+    );
+  }
+
   try {
-    const sent = await sendBridgeFile(destinoDe(conv), base64, mimeType, fileName);
+    const sent = await sendBridgeFile(destino, base64, mimeType, fileName);
 
     // Igual que en /send: cuando WhatsApp no devuelve el id del envío, el eco
     // del celular puede haber guardado ya este archivo. Se adopta esa fila

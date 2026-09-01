@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { withColumnFallback } from "@/lib/pg-compat";
-import { destinoDe, mensajeDeErrorLegible, sendBridgeMessage } from "@/lib/wa-bridge";
+import { mensajeDeErrorLegible, sendBridgeMessage } from "@/lib/wa-bridge";
+import { resolverDestinoConversacion } from "@/lib/wa-destino";
 import { sendMessageSchema } from "@/lib/validations/chat.schema";
 import { NextResponse } from "next/server";
 
@@ -26,8 +27,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Conversación no encontrada" }, { status: 404 });
   }
 
+  // Los chats abiertos desde un lead se guardaron con `<telefono>@c.us`, que es
+  // lo que WhatsApp ya no acepta: aquí se resuelve su `@lid` y se guarda.
+  const { destino, sinWhatsapp } = await resolverDestinoConversacion(supabase, conv);
+  if (sinWhatsapp) {
+    return NextResponse.json(
+      { error: `El número ${conv.contact_phone ?? ""} no tiene WhatsApp. Revísalo en la ficha del lead.`.replace("  ", " ") },
+      { status: 400 }
+    );
+  }
+
   try {
-    const sent = await sendBridgeMessage(destinoDe(conv), body.trim());
+    const sent = await sendBridgeMessage(destino, body.trim());
 
     // Guardar el mensaje enviado (o actualizar la fila fallida en un reintento)
     const messageRow = {
