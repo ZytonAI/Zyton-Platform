@@ -29,6 +29,7 @@ async function bridgeFetch(path: string, options: RequestInit = {}) {
  * Eso no le dice nada a nadie, y era lo que aparecía en la burbuja del chat.
  */
 export function mensajeDeErrorLegible(raw: string): string {
+  if (/no tiene whatsapp/i.test(raw)) return raw;
   if (/no lid for user/i.test(raw)) {
     return "WhatsApp no pudo resolver a quién mandarle el mensaje. Suele arreglarse si el contacto escribe primero; si sigue, reconecta la sesión.";
   }
@@ -58,6 +59,48 @@ export async function disconnectBridge() {
   const res = await bridgeFetch("/disconnect", { method: "POST" });
   if (!res.ok) throw new Error(`Bridge error ${res.status}`);
   return res.json() as Promise<{ ok: boolean }>;
+}
+
+/**
+ * A qué identificador hay que mandarle el mensaje de una conversación: el
+ * `@lid` manda sobre el teléfono, porque es como WhatsApp direcciona ahora.
+ * Sin `@lid` resuelto se cae al `wa_chat_id` de siempre.
+ */
+export function destinoDe(conv: { wa_chat_id: string; wa_lid?: string | null }): string {
+  return conv.wa_lid || conv.wa_chat_id;
+}
+
+export interface DestinoWa {
+  /** A qué identificador hay que mandarle (el @lid si se pudo resolver) */
+  destino: string;
+  /** El @lid del contacto, null si no se pudo averiguar */
+  lid: string | null;
+  /** true/false si se pudo comprobar; null si no se pudo saber */
+  existe: boolean | null;
+}
+
+/**
+ * Le pregunta al bridge con qué identificador hay que hablarle a un número y
+ * si siquiera tiene WhatsApp. Devuelve null si el bridge no contesta o no está
+ * conectado: eso no debe impedir abrir el chat, solo deja el `@lid` sin
+ * resolver hasta el primer mensaje.
+ */
+export async function resolveBridgeDestination(to: string): Promise<DestinoWa | null> {
+  try {
+    const res = await bridgeFetch("/resolve", {
+      method: "POST",
+      body: JSON.stringify({ to }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<DestinoWa>;
+    return {
+      destino: data.destino ?? to,
+      lid: data.lid ?? null,
+      existe: data.existe ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function sendBridgeMessage(to: string, body: string) {

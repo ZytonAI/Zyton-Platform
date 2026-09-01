@@ -230,12 +230,18 @@ async function resolverTelefono(chatId, contact) {
 // ── A quién se le manda ───────────────────────────────────
 // WhatsApp está migrando de identificar a la gente por su número (`@c.us`) a
 // hacerlo por un identificador interno (`@lid`). En una cuenta ya migrada,
-// pedirle que mande a `<numero>@c.us` puede reventar dentro de WhatsApp Web
-// con "No LID for user ...": el número existe, pero no hay forma de traducirlo
-// al identificador con el que de verdad se direcciona el mensaje.
+// mandarle a `<numero>@c.us` revienta dentro de WhatsApp Web con
+// "No LID for user ...".
 //
-// El destino bueno es el `@lid`. Se busca por tres caminos, del más barato al
-// más caro, y si ninguno da se manda al número como siempre.
+// El orden de abajo no es arbitrario. `getContactLidAndPhone` termina llamando
+// a `getCurrentLid(wid)`, que LANZA en vez de devolver vacío cuando WhatsApp
+// nunca ha consultado a ese contacto — y como lanza, la propia librería nunca
+// llega a su plan B. Por eso aquí se hace ese plan B primero: `getNumberId`
+// dispara `queryWidExists`, que es lo que mete al contacto en la caché de
+// WhatsApp; recién después tiene sentido pedirle su LID.
+//
+// Ese es justo el caso de escribirle a alguien de cero, que es lo que no
+// funcionaba: a quien nos ha escrito ya lo conocemos, a quien no, no.
 
 /** teléfono (solo dígitos) → `<lid>@lid`, aprendido de los mensajes que entran. */
 const lidPorTelefono = new Map();
@@ -250,41 +256,60 @@ function esErrorDeDireccion(err) {
   return /lid|wid|jid|not.*(exist|found)/i.test(err?.message ?? "");
 }
 
-/** El `@lid` del contacto, si se puede averiguar. null si no. */
-async function lidDe(to) {
-  if (to.endsWith("@lid")) return to;
+/**
+ * Averigua a qué identificador hay que mandarle, y de paso si el número
+ * siquiera tiene WhatsApp.
+ *
+ * Devuelve { destino, lid, pn, existe }:
+ *   destino — a dónde mandar (el @lid si se pudo, si no lo que entró)
+ *   existe  — null si no se pudo comprobar; false = el número no tiene WhatsApp
+ */
+async function resolverDestino(to) {
   const phone = to.replace(/@.*$/, "");
 
-  const aprendido = lidPorTelefono.get(phone);
-  if (aprendido) return aprendido;
+  // Ya es un @lid: es el identificador bueno, no hay nada que resolver
+  if (to.endsWith("@lid")) return { destino: to, lid: to, pn: null, existe: true };
 
+  const aprendido = lidPorTelefono.get(phone);
+  if (aprendido) return { destino: aprendido, lid: aprendido, pn: to, existe: true };
+
+  // 1. Existencia — además de decirnos si tiene WhatsApp, deja al contacto
+  //    cargado en WhatsApp Web, que es lo que hace posible el paso 2.
+  let existe = null;
+  let widConsulta = null;
+  try {
+    const wid = await client.getNumberId(phone);
+    widConsulta = wid?._serialized ?? null;
+    existe = !!widConsulta;
+  } catch (err) {
+    console.warn(`getNumberId falló para ${phone}: ${err.message}`);
+  }
+
+  if (existe === false) {
+    console.warn(`El número ${phone} no está registrado en WhatsApp`);
+    return { destino: to, lid: null, pn: to, existe: false };
+  }
+
+  // 2. Ahora sí, el LID
   if (typeof client.getContactLidAndPhone === "function") {
     try {
       const [info] = await client.getContactLidAndPhone([to]);
-      // Puede tirar el mismo "No LID for user": por eso va en try/catch
       if (info?.lid) {
         lidPorTelefono.set(phone, info.lid);
-        return info.lid;
+        return { destino: info.lid, lid: info.lid, pn: info.pn ?? to, existe: true };
       }
     } catch (err) {
       console.warn(`No se pudo resolver el LID de ${to}: ${err.message}`);
     }
   }
 
-  try {
-    // Consulta de existencia pura; no pasa por la traducción a LID, así que
-    // no puede fallar por lo mismo. En una cuenta migrada suele devolver el lid.
-    const wid = await client.getNumberId(phone);
-    const serializado = wid?._serialized;
-    if (serializado && serializado !== to) {
-      lidPorTelefono.set(phone, serializado);
-      return serializado;
-    }
-  } catch (err) {
-    console.warn(`getNumberId falló para ${phone}: ${err.message}`);
+  // 3. La consulta de existencia ya puede haber devuelto el identificador bueno
+  if (widConsulta && widConsulta !== to) {
+    lidPorTelefono.set(phone, widConsulta);
+    return { destino: widConsulta, lid: widConsulta, pn: to, existe: true };
   }
 
-  return null;
+  return { destino: to, lid: null, pn: to, existe };
 }
 
 /**
@@ -295,22 +320,26 @@ async function lidDe(to) {
  * mensaje llegó a salir antes de reventar, reintentar lo mandaría dos veces.
  */
 async function enviarMensaje(to, contenido, opciones) {
-  const lid = await lidDe(to);
-  const orden = lid && lid !== to ? [lid, to] : [to];
+  const { destino, existe } = await resolverDestino(to);
+  const orden = destino !== to ? [destino, to] : [to];
 
   let ultimoError;
-  for (let i = 0; i < orden.length; i++) {
-    const destino = orden[i];
+  for (const candidato of orden) {
     try {
-      const sent = await client.sendMessage(destino, contenido, opciones);
-      if (destino !== to) console.log(`Enviado a ${to} direccionando a ${destino}`);
+      const sent = await client.sendMessage(candidato, contenido, opciones);
+      if (candidato !== to) console.log(`Enviado a ${to} direccionando a ${candidato}`);
       return sent;
     } catch (err) {
       ultimoError = err;
-      console.warn(`Envío a ${destino} falló: ${err.message}`);
-      // Un error que no es de dirección no se arregla cambiando de destino
+      console.warn(`Envío a ${candidato} falló: ${err.message}`);
       if (!esErrorDeDireccion(err)) break;
     }
+  }
+
+  // Si el número no está en WhatsApp, decirlo así: es accionable, y
+  // "No LID for user" no le dice nada a nadie.
+  if (existe === false) {
+    throw new Error(`El número ${to.replace(/@.*$/, "")} no tiene WhatsApp`);
   }
   throw ultimoError;
 }
@@ -489,6 +518,28 @@ app.post("/disconnect", async (_req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * ¿Este número tiene WhatsApp, y con qué identificador hay que hablarle?
+ *
+ * Lo usa el CRM al abrir un chat desde un lead: así se sabe de entrada si el
+ * número sirve, y se guarda el `@lid` para no tener que resolverlo en cada
+ * envío. También deja al contacto cargado en WhatsApp Web, que es lo que hace
+ * que el primer mensaje a alguien de cero no falle.
+ */
+app.post("/resolve", async (req, res) => {
+  const { to } = req.body ?? {};
+  if (!to) return res.status(400).json({ error: "Falta el campo: to" });
+  if (status !== "connected") {
+    return res.status(503).json({ error: "WhatsApp no está conectado" });
+  }
+  try {
+    const resuelto = await resolverDestino(to);
+    res.json({ ok: true, ...resuelto });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Error resolviendo el destino" });
   }
 });
 

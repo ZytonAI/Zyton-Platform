@@ -167,7 +167,13 @@ export function LeadsClient({ initialLeads }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: lead.phone, name: lead.name, lead_id: lead.id }),
       });
-      if (!res.ok) { toast.error("Error creando conversación"); return; }
+      if (!res.ok) {
+        // El servidor sabe por qué falló — p. ej. que el número no tiene
+        // WhatsApp, que es accionable: se corrige el teléfono del lead.
+        const err = await res.json().catch(() => ({}));
+        toast.error(typeof err.error === "string" ? err.error : "Error creando conversación");
+        return;
+      }
       const conv = await res.json();
       router.push(`/chat?conv=${conv.id}`);
     } catch {

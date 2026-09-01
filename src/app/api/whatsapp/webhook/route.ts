@@ -129,6 +129,8 @@ export async function POST(request: Request) {
   let convId: string | null = null;
   let needsCanonicalUpdate = false;
 
+  const esLid = wa_chat_id.endsWith("@lid");
+
   const { data: exactConv } = await supabase
     .from("conversations")
     .select("id")
@@ -157,18 +159,18 @@ export async function POST(request: Request) {
     // El workspace es compartido: el lead puede haberlo creado cualquiera
     const leadId = contact_phone ? await buscarLeadPorTelefono(supabase, contact_phone) : null;
 
-    const { data: newConv, error: convErr } = await supabase
-      .from("conversations")
-      .insert({
+    const { data: newConv, error: convErr } = await withColumnFallback(
+      {
         owner_id,
         wa_chat_id,
+        wa_lid: esLid ? wa_chat_id : null,
         contact_phone: contact_phone ?? null,
         contact_name: contact_name ?? null,
         lead_id: leadId,
         updated_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
+      },
+      (row) => supabase.from("conversations").insert(row).select("id").single()
+    );
 
     if (convErr || !newConv) {
       return NextResponse.json({ error: "Error guardando conversacion" }, { status: 500 });
@@ -183,7 +185,7 @@ export async function POST(request: Request) {
   if (contact_phone) {
     const { data: conv } = await supabase
       .from("conversations")
-      .select("contact_phone, lead_id")
+      .select("*")
       .eq("id", convId)
       .maybeSingle();
 
@@ -195,8 +197,15 @@ export async function POST(request: Request) {
       const leadId = await buscarLeadPorTelefono(supabase, contact_phone);
       if (leadId) patch.lead_id = leadId;
     }
+    // Quien nos escribe desde un @lid nos está dando el identificador con el
+    // que hay que responderle: guardarlo es lo que hace que responder funcione
+    // sin tener que resolverlo en cada envío.
+    if (esLid && conv && !conv.wa_lid) patch.wa_lid = wa_chat_id;
+
     if (Object.keys(patch).length > 0) {
-      await supabase.from("conversations").update(patch).eq("id", convId);
+      await withColumnFallback(patch, (row) =>
+        supabase.from("conversations").update(row).eq("id", convId!).select("id").single()
+      );
     }
   }
 

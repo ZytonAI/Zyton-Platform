@@ -168,7 +168,13 @@ Todo lo planeado está en producción: auth y roles, CRM de leads y clientes, fa
 
 **El eco de lo que uno manda.** `client.sendMessage` puede devolver `undefined` aunque el mensaje salga, así que la fila se guarda sin `wa_message_id` y el evento `message_create` llega como si lo hubieran escrito desde el celular. Las rutas `/send` y `/send-file` y el webhook lo reconcilian (mismo chat, mismo texto o archivo por archivo, menos de 2 minutos) para no pintar la burbuja dos veces. Ante la duda se inserta: repetir una burbuja es mejor que tragarse un mensaje.
 
-**`@lid` no es un teléfono.** Los chats nuevos llegan identificados como `269152866533531@lid`. El bridge lo traduce con `getContactLidAndPhone` y el webhook cura las conversaciones viejas (teléfono real + vínculo al lead) cuando entra el siguiente mensaje.
+**`@lid` no es un teléfono, y ya es la dirección principal.** A la misma persona WhatsApp la identifica de dos formas: `573104163897@c.us` (el teléfono, que es lo que crea el CRM al abrir el chat desde un lead) y `52162478518357@lid` (el identificador interno, que es lo que llega cuando esa persona escribe). En una cuenta ya migrada **mandar al `@c.us` revienta** con "No LID for user".
+
+Por eso `conversations.wa_lid` (migración 024) guarda el `@lid` y es a donde se envía (`destinoDe` en `src/lib/wa-bridge.ts`); sin él se cae al `wa_chat_id` de siempre. El webhook lo guarda cuando el mensaje llega de un `@lid`, y `POST /api/whatsapp/conversations` se lo pregunta al bridge (`/resolve`) al abrir el chat — que es lo que permite escribirle a alguien **de cero**, sin que haya escrito antes.
+
+**El orden de la resolución importa.** `getContactLidAndPhone` termina en `getCurrentLid(wid)`, que *lanza* en vez de devolver vacío cuando WhatsApp nunca consultó a ese contacto — y como lanza, la propia librería nunca llega a su plan B. El bridge hace ese plan B primero: `getNumberId` (que dispara `queryWidExists` y mete al contacto en la caché de WhatsApp) y recién después pide el LID. Ese era exactamente el caso del primer mensaje a un desconocido.
+
+`getNumberId` sirve además para saber si el número tiene WhatsApp: si no, se dice así en vez de soltar "No LID for user". Un fallo de la consulta deja `existe` en `null`, nunca en `false` — no se afirma que un número no sirve solo porque no se pudo comprobar.
 
 ## whatsapp-service — de dónde se despliega
 

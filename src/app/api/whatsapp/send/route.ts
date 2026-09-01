@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { withColumnFallback } from "@/lib/pg-compat";
-import { mensajeDeErrorLegible, sendBridgeMessage } from "@/lib/wa-bridge";
+import { destinoDe, mensajeDeErrorLegible, sendBridgeMessage } from "@/lib/wa-bridge";
 import { sendMessageSchema } from "@/lib/validations/chat.schema";
 import { NextResponse } from "next/server";
 
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   // Obtener la conversación
   const { data: conv, error: convErr } = await supabase
     .from("conversations")
-    .select("wa_chat_id")
+    .select("*")
     .eq("id", conversation_id)
     .single();
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const sent = await sendBridgeMessage(conv.wa_chat_id, body.trim());
+    const sent = await sendBridgeMessage(destinoDe(conv), body.trim());
 
     // Guardar el mensaje enviado (o actualizar la fila fallida en un reintento)
     const messageRow = {

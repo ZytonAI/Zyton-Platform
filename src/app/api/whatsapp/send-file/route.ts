@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withColumnFallback } from "@/lib/pg-compat";
-import { sendBridgeFile } from "@/lib/wa-bridge";
+import { destinoDe, mensajeDeErrorLegible, sendBridgeFile } from "@/lib/wa-bridge";
 import { sendFileSchema } from "@/lib/validations/chat.schema";
 import { NextResponse } from "next/server";
 
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   // Obtener conversación
   const { data: conv, error: convErr } = await supabase
     .from("conversations")
-    .select("wa_chat_id")
+    .select("*")
     .eq("id", conversation_id)
     .single();
 
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   const sentMediaUrl = isHtml || !attachment.storage_path ? null : `attachments/${attachment.storage_path}`;
 
   try {
-    const sent = await sendBridgeFile(conv.wa_chat_id, base64, mimeType, fileName);
+    const sent = await sendBridgeFile(destinoDe(conv), base64, mimeType, fileName);
 
     // Igual que en /send: cuando WhatsApp no devuelve el id del envío, el eco
     // del celular puede haber guardado ya este archivo. Se adopta esa fila
@@ -154,7 +154,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(msg, { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Error enviando archivo";
+    const crudo = err instanceof Error ? err.message : "Error enviando archivo";
+    console.error("[whatsapp] fallo al enviar archivo:", crudo);
+    const message = mensajeDeErrorLegible(crudo);
 
     // Persistir el intento como "failed" para que no desaparezca de la UI
     const { data: failedMsg } = await supabase

@@ -94,6 +94,12 @@ export interface Conversation {
   id: string;
   owner_id: string;
   wa_chat_id: string;
+  /**
+   * El identificador `@lid` del contacto. WhatsApp ya no direcciona por
+   * número: sin esto, escribirle a alguien de cero falla. null = todavía
+   * sin resolver (migración 024).
+   */
+  wa_lid?: string | null;
   contact_name: string | null;
   contact_phone: string;
   lead_id: string | null;
