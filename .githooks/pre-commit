@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# No dejar que se commiteen cambios del bridge de WhatsApp.
+#
+# EasyPanel redespliega el servicio al recibirlos, y cada redespliegue tumba
+# la sesión de WhatsApp: hay que volver a escanear el QR desde el celular, que
+# además es compartido por los cuatro. Mientras el número esté en uso, el
+# bridge se congela.
+#
+# Para tocarlo a propósito (sabiendo que habrá que re-escanear):
+#   git commit --no-verify
+#
+# Para quitar el bloqueo del todo:
+#   git config --unset core.hooksPath
+
+RUTA_BLOQUEADA="whatsapp-service/"
+
+tocados=$(git diff --cached --name-only | grep "^$RUTA_BLOQUEADA" || true)
+
+if [ -n "$tocados" ]; then
+  echo ""
+  echo "✋ Commit detenido: hay cambios en $RUTA_BLOQUEADA"
+  echo ""
+  echo "$tocados" | sed 's/^/     /'
+  echo ""
+  echo "   Subir esto redespliega el bridge en EasyPanel y CIERRA la sesión"
+  echo "   de WhatsApp — habría que volver a escanear el QR."
+  echo ""
+  echo "   Sacarlos del commit:   git restore --staged $RUTA_BLOQUEADA"
+  echo "   Hacerlo de todos modos: git commit --no-verify"
+  echo ""
+  exit 1
+fi

@@ -22,6 +22,8 @@ Lo que cuenta para la meta es la **etiqueta**, no la fecha: un contacto sin `con
 
 **Calendario y Wiki**: cada evento y cada página es `team` (lo ve el equipo, default) o `personal` (solo quien lo creó, garantizado por RLS). Migraciones 018 y 019.
 
+**`contacted_by` no es "lo contactó"**: es quién *trabaja* el lead. Raúl se lo pone a todo lo que encuentra, así que contar por ahí decía que Daniel había contactado 110 cuando había escrito a 5. Quien de verdad fue contactado es el que tiene `contacted_at`; el Dashboard muestra las dos cosas por separado — "Por trabajar" (asignados) y "Contactados" (con fecha).
+
 **Quién hizo qué**: `owner_id` (creador) se traduce a persona con `src/lib/directory.ts` y se pinta en el historial, los adjuntos, los mensajes de WhatsApp salientes, la Wiki y las fichas. El contexto de sesión (`SessionContext`) lleva rol, slug propio y ese directorio.
 
 **Avisos**: asignar una tarea o etiquetar un lead a alguien le manda un Telegram (`src/lib/notify-member.ts`); nunca a uno mismo. Raúl manda un solo aviso por lote.
@@ -177,7 +179,13 @@ Por eso `conversations.wa_lid` (migración 024) guarda el `@lid` y es a donde se
 
 `getNumberId` sirve además para saber si el número tiene WhatsApp: si no, se dice así en vez de soltar "No LID for user". Un fallo de la consulta deja `existe` en `null`, nunca en `false` — no se afirma que un número no sirve solo porque no se pudo comprobar.
 
-## whatsapp-service — de dónde se despliega
+## whatsapp-service — CONGELADO
+
+**No commitear nada de `whatsapp-service/` por ahora.** EasyPanel lo redespliega al recibir el cambio, y cada redespliegue **cierra la sesión de WhatsApp**: toca volver a escanear el QR desde el celular, que además comparten los cuatro.
+
+Lo hace cumplir un hook: `.githooks/pre-commit` rechaza cualquier commit que toque esa carpeta. Se activa con `git config core.hooksPath .githooks` (ya está puesto en la máquina de Samuel; cada clon nuevo lo tiene que correr). Para saltárselo a sabiendas, `git commit --no-verify`; para quitarlo, `git config --unset core.hooksPath`.
+
+El hook solo filtra por ruta. Si EasyPanel está configurado para reconstruir el servicio ante **cualquier** push del repo —y no solo ante cambios de esa carpeta—, el hook no alcanza: hay que apagar el auto-deploy de esa app en el panel.
 
 EasyPanel despliega el WA service desde **este** repo, carpeta `whatsapp-service/`: subir a `main` es todo lo que hace falta, el despliegue sale solo.
 

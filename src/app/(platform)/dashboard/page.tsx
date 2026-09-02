@@ -157,7 +157,7 @@ export default async function DashboardPage() {
       .gte("created_at", eightWeeksAgo)
       .limit(2000),
     // Etiquetas de equipo, para el corte por persona
-    supabase.from("leads").select("status, contacted_by, closed_by").limit(5000),
+    supabase.from("leads").select("status, contacted_by, closed_by, contacted_at").limit(5000),
     // Contactos de la quincena en curso, para el KPI
     supabase
       .from("leads")
@@ -213,23 +213,36 @@ export default async function DashboardPage() {
   // ── Cómo va cada quien ──
   // Si la migración 018 no está aplicada las columnas no existen y la query
   // falla; en ese caso se omite el bloque en vez de romper el dashboard.
-  type LeadTag = { status: string; contacted_by: string | null; closed_by: string | null };
+  type LeadTag = {
+    status: string;
+    contacted_by: string | null;
+    closed_by: string | null;
+    contacted_at: string | null;
+  };
   type ClientTag = { status: string; closed_by: string | null };
   const leadTags = (leadTagsRes.error ? [] : (leadTagsRes.data ?? [])) as LeadTag[];
   const clientTags = (clientTagsRes.error ? [] : (clientTagsRes.data ?? [])) as ClientTag[];
 
   const perMember: TotalesMiembro[] = TEAM_MEMBERS.map((member) => {
-    const contacted = leadTags.filter((l) => l.contacted_by === member.slug);
+    // `contacted_by` dice quién TRABAJA el lead, no quién lo contactó: Raúl se
+    // lo pone a todo lo que encuentra, así que contar por ahí daba 110
+    // "contactados" a quien había escrito a 5. Quien de verdad fue contactado
+    // es el que tiene fecha — la sella la base al etiquetarlo o al abrirle el
+    // chat (migraciones 022 y 023).
+    const asignados = leadTags.filter((l) => l.contacted_by === member.slug);
+    const contactados = asignados.filter((l) => l.contacted_at);
     const won = leadTags.filter((l) => l.closed_by === member.slug && l.status === "converted");
     const activeClients = clientTags.filter(
       (c) => c.closed_by === member.slug && c.status === "active"
     );
     return {
       member,
-      contacted: contacted.length,
+      asignados: asignados.length,
+      contacted: contactados.length,
       won: won.length,
       clients: activeClients.length,
-      rate: contacted.length > 0 ? Math.round((won.length / contacted.length) * 100) : 0,
+      // El cierre se mide sobre lo contactado de verdad, no sobre la cartera
+      rate: contactados.length > 0 ? Math.round((won.length / contactados.length) * 100) : 0,
     };
   });
 

@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 /** Cómo va el acumulado histórico de una persona, aparte de la quincena. */
 export interface TotalesMiembro {
   member: TeamMember;
+  /** Leads que tiene para trabajar — se los pone Raúl o quien se los asigne */
+  asignados: number;
+  /** De esos, a los que de verdad ya contactó (tienen fecha de contacto) */
   contacted: number;
   won: number;
   clients: number;
@@ -136,7 +139,11 @@ export function EquipoPanel({
                 {/* Acumulado de siempre — el corte histórico, no la quincena */}
                 {t && (
                   <dl className="flex items-center gap-x-2.5 gap-y-0.5 flex-wrap pt-2 border-t border-border/60 text-[10px] text-muted-foreground">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1" title="Leads que tiene para trabajar">
+                      <dt>Por trabajar</dt>
+                      <dd className="font-semibold text-foreground tabular-nums">{t.asignados}</dd>
+                    </div>
+                    <div className="flex items-center gap-1" title="De esos, a los que ya escribió">
                       <dt>Contactados</dt>
                       <dd className="font-semibold text-foreground tabular-nums">{t.contacted}</dd>
                     </div>
