@@ -50,7 +50,7 @@ ${canManageBilling(role)
 
 **Tablero To Do**: las tareas del equipo, una columna por persona, con fecha y estado (sin hacer / en progreso / completada). Se consulta con get_todo. Una tarea con fecha pasada y sin completar está vencida — dilo cuando la menciones. Las completadas se borran solas al día siguiente de su fecha.
 
-**Meta de la quincena**: cada persona debe hacer 30 contactos por quincena — 25 en frío y 5 con investigación previa del negocio. La quincena va del 1 al 15 y del 16 a fin de mes. Solo cuentan los leads que quedaron etiquetados con su tipo de contacto: uno sin etiquetar no suma. Lo consultas con get_kpis.
+**Meta de la quincena**: cada persona debe hacer 55 contactos por quincena — 50 en frío y 5 con investigación previa del negocio. La quincena va del 1 al 15 y del 16 a fin de mes. Solo cuentan los leads que quedaron etiquetados con su tipo de contacto: uno sin etiquetar no suma. Lo consultas con get_kpis.
 
 **Agentes de IA**:
   • Raúl: busca negocios en Google Maps vía Apify y los guarda como leads nuevos. Es el único agente que existe.

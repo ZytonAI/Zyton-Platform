@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 El chat además tiene su propia etiqueta, `conversations.assigned_to` (migración 021), que manda sobre la del lead: un número que todavía no es lead también se puede repartir. Asignar desde el hilo escribe las dos cuando hay lead.
 
-**KPI de la quincena**: la meta es **30 contactos por persona cada quincena** — 25 en frío y 5 con investigación previa del negocio. Se mide con dos columnas de `leads` (migración 022): `contact_type` (`frio` | `investigado`, la etiqueta que se pone al contactar) y `contacted_at` (la fecha, que decide en qué quincena cae). La quincena va del 1 al 15 y del 16 a fin de mes, hora de Colombia; las cuentas y las metas viven en `src/lib/kpi.ts` y el bloque lo ven los cuatro en el Dashboard.
+**KPI de la quincena**: la meta es **55 contactos por persona cada quincena** — 50 en frío y 5 con investigación previa del negocio. Se mide con dos columnas de `leads` (migración 022): `contact_type` (`frio` | `investigado`, la etiqueta que se pone al contactar) y `contacted_at` (la fecha, que decide en qué quincena cae). La quincena va del 1 al 15 y del 16 a fin de mes, hora de Colombia; las cuentas y las metas viven en `src/lib/kpi.ts` y el bloque lo ven los cuatro en el Dashboard.
 
 Lo que cuenta para la meta es la **etiqueta**, no la fecha: un contacto sin `contact_type` no suma ni en el total ni en ninguna de las dos sub-metas, solo aparece como "sin etiquetar · no cuentan". Así, quitarle la etiqueta a un lead lo descuenta de las dos cuentas a la vez.
 
@@ -141,7 +141,7 @@ src/
     ui/                   # Componentes shadcn/ui
   lib/
     team.ts               # Los 4 miembros (usuario, nombre, email, color, rol)
-    kpi.ts                # Meta de la quincena: 30 contactos (25 en frío, 5 investigados)
+    kpi.ts                # Meta de la quincena: 55 contactos (50 en frío, 5 investigados)
     view-as.ts            # Cookie de la vista prestada del Dueño
     diana-scope.ts        # Qué le muestra Diana a cada persona
     permissions.ts        # Roles owner/partner y qué puede ver cada uno

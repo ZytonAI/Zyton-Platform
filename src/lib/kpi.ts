@@ -2,9 +2,9 @@ import { TEAM_MEMBERS, type TeamMember, type TeamSlug } from "@/lib/team";
 import { fechaHoyColombia } from "@/lib/event-time";
 
 /**
- * KPI comercial: 30 contactos por persona cada quincena.
+ * KPI comercial: 55 contactos por persona cada quincena.
  *
- *   25 en frío           — se escribe sin haber mirado el negocio antes
+ *   50 en frío           — se escribe sin haber mirado el negocio antes
  *    5 con investigación — se revisó el negocio antes de escribir
  *
  * El dato vive en `leads.contact_type` y `leads.contacted_at` (migración 022).
@@ -13,8 +13,8 @@ import { fechaHoyColombia } from "@/lib/event-time";
 export type ContactType = "frio" | "investigado";
 
 export const META_QUINCENA = {
-  total: 30,
-  frio: 25,
+  total: 55,
+  frio: 50,
   investigado: 5,
 } as const;
 
@@ -106,7 +106,7 @@ export interface FilaKpi {
    * para la meta — están aquí para avisar que falta clasificarlos.
    */
   sinEtiqueta: number;
-  /** Avance sobre los 30, tope 100 */
+  /** Avance sobre los 55, tope 100 */
   pct: number;
   cumplido: boolean;
 }

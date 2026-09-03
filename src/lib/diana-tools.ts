@@ -69,7 +69,7 @@ const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "get_kpis",
       description:
-        "Retorna los KPIs: el avance de la meta de la quincena (30 contactos — 25 en frío y 5 con investigación), leads, tasa de conversión y clientes activos. Por defecto los de la persona con la que hablas; con alcance='equipo' trae el consolidado de los cuatro.",
+        "Retorna los KPIs: el avance de la meta de la quincena (55 contactos — 50 en frío y 5 con investigación), leads, tasa de conversión y clientes activos. Por defecto los de la persona con la que hablas; con alcance='equipo' trae el consolidado de los cuatro.",
       parameters: {
         type: "object",
         properties: { alcance: ALCANCE_PARAM },
