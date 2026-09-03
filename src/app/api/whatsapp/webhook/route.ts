@@ -128,33 +128,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  // ── Buscar conversación: exacta por wa_chat_id, luego por teléfono normalizado ──
+  // ── Buscar la conversación: por id, por @lid y por teléfono ──
   let convId: string | null = null;
   let needsCanonicalUpdate = false;
 
   const esLid = wa_chat_id.endsWith("@lid");
-
-  const { data: exactConv } = await supabase
+  // El chat es del workspace, no de quien lo abrió: aquí NO se filtra por
+  // `owner_id`. Filtrarlo era lo que duplicaba las conversaciones — el
+  // `owner_id` de un mensaje entrante es el de la sesión de WhatsApp (una
+  // sola, la de Samuel), así que el que abría Daniel desde un lead quedaba
+  // invisible y el webhook creaba una segunda fila al responder el lead.
+  const { data: candidates } = await supabase
     .from("conversations")
-    .select("id")
-    .eq("owner_id", owner_id)
-    .eq("wa_chat_id", wa_chat_id)
-    .maybeSingle();
+    .select("id, wa_chat_id, wa_lid, contact_phone")
+    .order("updated_at", { ascending: false });
 
-  if (exactConv) {
-    convId = exactConv.id;
-  } else if (contact_phone) {
-    const { data: candidates } = await supabase
-      .from("conversations")
-      .select("id, contact_phone")
-      .eq("owner_id", owner_id)
-      .order("updated_at", { ascending: false });
+  // Por orden de certeza: el mismo id, el mismo @lid, el mismo teléfono.
+  const porChatId = candidates?.find((c) => c.wa_chat_id === wa_chat_id);
+  const porLid = esLid ? candidates?.find((c) => c.wa_lid === wa_chat_id) : undefined;
+  const porTelefono = contact_phone
+    ? candidates?.find((c) => phonesMatch(c.contact_phone, contact_phone))
+    : undefined;
 
-    const match = candidates?.find((c) => phonesMatch(c.contact_phone, contact_phone));
-    if (match) {
-      convId = match.id;
-      needsCanonicalUpdate = true;
-    }
+  const existente = porChatId ?? porLid ?? porTelefono;
+
+  if (existente) {
+    convId = existente.id;
+    // Canonicalizar el id solo cuando lo que llega ES un teléfono. Si llega un
+    // @lid no se toca: el chat abierto desde el lead guarda su `<tel>@c.us` y
+    // ese es el que la ficha del lead espera encontrar. Para escribirle se usa
+    // `wa_lid`, que ya quedó guardado (ver wa-destino.ts).
+    needsCanonicalUpdate = !porChatId && !esLid;
   }
 
   // Si no existe, crear nueva conversación e intentar vincular al lead por teléfono
