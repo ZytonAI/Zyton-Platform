@@ -2,6 +2,24 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { conHoraDeColombia } from "@/lib/event-time";
 import type OpenAI from "openai";
 import { canManageBilling, type Role } from "@/lib/permissions";
+import {
+  filtroMio,
+  leeTodo,
+  puedeTocar,
+  puedeTocarEvento,
+  type Alcance,
+  type DianaActor,
+} from "@/lib/diana-scope";
+import { kpiPorPersona, META_QUINCENA, quincenaActual } from "@/lib/kpi";
+import type { MemberTag } from "@/types";
+
+/** Parámetro común de las tools de lectura: lo mío o lo de todos. */
+const ALCANCE_PARAM = {
+  type: "string",
+  enum: ["mios", "equipo"],
+  description:
+    "'mios' (default) trae solo lo que le toca a la persona con la que hablas. Usa 'equipo' SOLO si pide explícitamente el consolidado del equipo o lo de otra persona.",
+} as const;
 
 // ── Tool definitions for OpenAI function calling ──────────────────────────────
 
@@ -14,10 +32,11 @@ const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "get_leads",
       description:
-        "Consulta los leads del CRM con filtros opcionales. Úsala para responder preguntas sobre leads, listarlos, o identificar cuáles tienen o no tienen web, por estado, prioridad, etc.",
+        "Consulta los leads del CRM con filtros opcionales. Úsala para responder preguntas sobre leads, listarlos, o identificar cuáles tienen o no tienen web, por estado, prioridad, etc. Por defecto trae solo los leads de la persona con la que hablas (los que ella contactó, más los que no tiene nadie).",
       parameters: {
         type: "object",
         properties: {
+          alcance: ALCANCE_PARAM,
           status: {
             type: "string",
             enum: ["new", "contacted", "scheduled", "qualified", "lost", "converted"],
@@ -50,8 +69,12 @@ const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "get_kpis",
       description:
-        "Retorna los KPIs generales del negocio: total de leads, convertidos, tasa de conversión, clientes activos, mensajes de WhatsApp.",
-      parameters: { type: "object", properties: {}, required: [] },
+        "Retorna los KPIs: el avance de la meta de la quincena (30 contactos — 25 en frío y 5 con investigación), leads, tasa de conversión y clientes activos. Por defecto los de la persona con la que hablas; con alcance='equipo' trae el consolidado de los cuatro.",
+      parameters: {
+        type: "object",
+        properties: { alcance: ALCANCE_PARAM },
+        required: [],
+      },
     },
   },
   {
@@ -81,10 +104,12 @@ const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "get_clients",
-      description: "Retorna los clientes del negocio con su estado y detalles de contrato.",
+      description:
+        "Retorna los clientes del negocio con su estado y detalles de contrato. Por defecto solo los que cerró la persona con la que hablas, más los que no tienen dueño.",
       parameters: {
         type: "object",
         properties: {
+          alcance: ALCANCE_PARAM,
           status: {
             type: "string",
             enum: ["active", "inactive", "churned"],
@@ -245,24 +270,34 @@ export async function runTool(
   name: string,
   args: Record<string, unknown>,
   supabase: SupabaseClient,
-  ownerId: string,
-  baseUrl: string,
-  role: Role = "partner"
+  actor: DianaActor,
+  baseUrl: string
 ): Promise<string> {
+  const ownerId = actor.ownerId;
+  const alcance = args.alcance as Alcance | undefined;
+
   // Cinturón y tirantes: aunque la tool no se le haya ofrecido, si el modelo
   // la inventa no se ejecuta.
-  if (BILLING_TOOLS.has(name) && !canManageBilling(role)) {
+  if (BILLING_TOOLS.has(name) && !canManageBilling(actor.role)) {
     return "Sin acceso: los cobros son solo del Dueño.";
   }
 
   try {
     switch (name) {
       case "get_leads": {
+        const todos = leeTodo(actor, alcance);
+
         let query = supabase
           .from("leads")
-          .select("id,name,phone,email,company,status,priority,source,website,analyzed,created_at")
+          .select(
+            "id,name,phone,email,company,status,priority,source,website,analyzed,contacted_by,contact_type,contacted_at,created_at"
+          )
           .order("created_at", { ascending: false })
           .limit(Math.min(Number(args.limit ?? 20), 50));
+
+        // Diana se salta RLS (service role), así que el corte por persona va
+        // aquí. Los leads sin etiquetar no son de nadie y los ve cualquiera.
+        if (!todos) query = query.or(filtroMio("contacted_by", actor.slug));
 
         if (args.status) query = query.eq("status", args.status as string);
         if (args.priority) query = query.eq("priority", args.priority as string);
@@ -273,35 +308,98 @@ export async function runTool(
           query = query.or("website.is.null,website.eq.Sin página web");
 
         const { data, error } = await query;
+        // Si la base todavía no tiene las columnas de etiqueta, no se puede
+        // separar por persona: mejor no mostrar nada que mostrar lo ajeno.
+        if (error && !todos && error.message.includes("contacted_by")) {
+          return "No puedo separar los leads por persona todavía (falta correr la migración de etiquetas), así que prefiero no mostrarlos.";
+        }
         if (error) return `Error: ${error.message}`;
         return JSON.stringify(data ?? []);
       }
 
       case "get_kpis": {
-        const [leadsRes, clientsRes, messagesRes] = await Promise.all([
+        const todos = leeTodo(actor, alcance);
+        const q = quincenaActual();
+
+        const [contactadosRes, leadsRes, clientsRes, messagesRes] = await Promise.all([
+          // Lo que cuenta para la meta: contactados dentro de esta quincena
           supabase
             .from("leads")
-            .select("status"),
-          supabase
-            .from("clients")
-            .select("status"),
-          supabase
-            .from("messages")
-            .select("id", { count: "exact", head: true }),
+            .select("contacted_by,contact_type")
+            .gte("contacted_at", q.desde)
+            .lt("contacted_at", q.hasta),
+          supabase.from("leads").select("status,contacted_by"),
+          supabase.from("clients").select("status,closed_by"),
+          supabase.from("messages").select("id", { count: "exact", head: true }),
         ]);
 
+        if (contactadosRes.error)
+          return `Error consultando el KPI de la quincena: ${contactadosRes.error.message}`;
+        if (leadsRes.error) return `Error: ${leadsRes.error.message}`;
+
+        const quincena = {
+          periodo: q.etiqueta,
+          dias_restantes: q.diasRestantes,
+          meta: { ...META_QUINCENA },
+        };
+
+        // Para el KPI, "míos" es estricto: un lead sin etiquetar no es de
+        // nadie y no suma para ninguna meta (ver src/lib/kpi.ts).
+        const crudas = kpiPorPersona(contactadosRes.data ?? []);
+        const resumir = (f: (typeof crudas)[number]) => ({
+          persona: f.member.name,
+          contactos: f.total,
+          frio: f.frio,
+          investigado: f.investigado,
+          sin_etiqueta: f.sinEtiqueta,
+          avance: `${f.pct}%`,
+          cumplida: f.cumplido,
+          faltan_frio: Math.max(0, META_QUINCENA.frio - f.frio),
+          faltan_investigado: Math.max(0, META_QUINCENA.investigado - f.investigado),
+        });
+
         const leads = leadsRes.data ?? [];
-        const total = leads.length;
-        const converted = leads.filter((l) => l.status === "converted").length;
-        const rate = total > 0 ? Math.round((converted / total) * 100) : 0;
-        const activeClients = (clientsRes.data ?? []).filter((c) => c.status === "active").length;
+        const clients = clientsRes.data ?? [];
+
+        if (todos) {
+          const total = leads.length;
+          const converted = leads.filter((l) => l.status === "converted").length;
+          const rate = total > 0 ? Math.round((converted / total) * 100) : 0;
+
+          return JSON.stringify({
+            quincena,
+            meta_por_persona: crudas.map(resumir),
+            workspace: {
+              total_leads: total,
+              leads_convertidos: converted,
+              tasa_conversion: `${rate}%`,
+              clientes_activos: clients.filter((c) => c.status === "active").length,
+              total_mensajes_whatsapp: messagesRes.count ?? 0,
+            },
+          });
+        }
+
+        // Vista personal: solo su fila de la meta y sus propios números.
+        const fila = crudas.find((f) => f.member.slug === actor.slug);
+        const mia = fila ? resumir(fila) : null;
+        const misLeads = leads.filter((l) => l.contacted_by === actor.slug);
+        const misConvertidos = misLeads.filter((l) => l.status === "converted").length;
+        const misClientes = clients.filter(
+          (c) => c.closed_by === actor.slug && c.status === "active"
+        ).length;
 
         return JSON.stringify({
-          total_leads: total,
-          leads_convertidos: converted,
-          tasa_conversion: `${rate}%`,
-          clientes_activos: activeClients,
-          total_mensajes_whatsapp: messagesRes.count ?? 0,
+          persona: actor.nombre,
+          quincena,
+          mi_meta: mia ?? "Sin contactos registrados en esta quincena.",
+          mis_leads: {
+            total: misLeads.length,
+            convertidos: misConvertidos,
+            tasa_conversion: misLeads.length
+              ? `${Math.round((misConvertidos / misLeads.length) * 100)}%`
+              : "0%",
+          },
+          mis_clientes_activos: misClientes,
         });
       }
 
@@ -356,14 +454,23 @@ export async function runTool(
       }
 
       case "get_clients": {
+        const todos = leeTodo(actor, alcance);
+
         let query = supabase
           .from("clients")
-          .select("id,name,email,phone,company,status,contract_start,contract_end")
+          .select("id,name,email,phone,company,status,contract_start,contract_end,closed_by")
           .order("created_at", { ascending: false });
+
+        // Ojo: las columnas de cobro (billing_*) nunca se piden aquí — no son
+        // de este select y además son solo del Dueño (ver client-billing.ts).
+        if (!todos) query = query.or(filtroMio("closed_by", actor.slug));
 
         if (args.status) query = query.eq("status", args.status as string);
 
         const { data, error } = await query;
+        if (error && !todos && error.message.includes("closed_by")) {
+          return "No puedo separar los clientes por persona todavía (falta correr la migración de etiquetas), así que prefiero no mostrarlos.";
+        }
         if (error) return `Error: ${error.message}`;
         return JSON.stringify(data ?? []);
       }
@@ -392,6 +499,22 @@ export async function runTool(
           eventDate = d.toISOString();
         } catch {
           return `No pude interpretar la fecha "${args.event_date}". Usa formato ISO como "2026-05-22T10:00:00".`;
+        }
+
+        // Vincular un lead lo mueve a "scheduled": es una escritura sobre el
+        // lead, así que pide el mismo permiso que update_lead_status.
+        if (args.lead_id) {
+          const { data: lead, error: leadErr } = await supabase
+            .from("leads")
+            .select("id,name,contacted_by")
+            .eq("id", args.lead_id as string)
+            .maybeSingle();
+
+          if (leadErr) return `❌ FALLÓ verificar el lead: ${leadErr.message}`;
+          if (!lead) return `❌ No encontré el lead ${args.lead_id}.`;
+          if (!puedeTocar(actor, (lead.contacted_by ?? null) as MemberTag)) {
+            return `❌ No puedo agendar a "${lead.name}": ese lead lo trabaja otra persona. Puedo crear el evento sin vincularlo, o agendar uno de los tuyos.`;
+          }
         }
 
         const row: Record<string, unknown> = {
@@ -439,10 +562,24 @@ export async function runTool(
         if (!ids?.length) return "No se proporcionaron IDs de leads";
 
         // Guardar estado anterior para poder revertir
-        const { data: oldLeads } = await supabase
+        const { data: oldLeads, error: readErr } = await supabase
           .from("leads")
-          .select("id,name,status")
+          .select("id,name,status,contacted_by")
           .in("id", ids);
+
+        // Diana se salta RLS: si no se puede comprobar de quién es cada lead,
+        // no se toca ninguno. Fallar cerrado, no abierto.
+        if (readErr) {
+          return `❌ No pude verificar de quién son esos leads, así que no cambié nada: ${readErr.message}`;
+        }
+
+        const ajenos = (oldLeads ?? []).filter(
+          (l) => !puedeTocar(actor, (l.contacted_by ?? null) as MemberTag)
+        );
+        if (ajenos.length) {
+          const nombres = ajenos.map((l) => `"${l.name}"`).join(", ");
+          return `❌ No puedo cambiar ${nombres}: ${ajenos.length === 1 ? "ese lead lo trabaja" : "esos leads los trabaja"} otra persona. Solo puedo mover los tuyos o los que todavía no tienen dueño.`;
+        }
 
         const { error, count } = await supabase
           .from("leads")
@@ -534,6 +671,12 @@ export async function runTool(
           .single();
 
         if (!eventData) return "No encontré ese evento o no tienes permiso para borrarlo.";
+
+        // Los eventos del equipo los mueve cualquiera; los personales, solo
+        // quien los creó — el mismo criterio que la RLS (migración 018).
+        if (!puedeTocarEvento(actor, eventData)) {
+          return "❌ Ese evento es personal de otra persona: no puedo borrarlo.";
+        }
 
         // Soft delete: marcar deleted_at en lugar de borrar
         const { error } = await supabase

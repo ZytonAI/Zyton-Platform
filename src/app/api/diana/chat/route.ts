@@ -3,13 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { processDianaMessage } from "@/lib/diana-core";
+import { actorDesde } from "@/lib/diana-scope";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
   // Solo para verificar auth — las queries las hace el service client
-  const { user, role } = await getSession();
+  // `member` y `role` son los de la vista prestada si el Dueño está "viendo
+  // como" alguien: Diana filtra igual que la interfaz que tiene enfrente.
+  const { user, role, member } = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json().catch(() => ({})) as {
@@ -26,13 +29,12 @@ export async function POST(request: Request) {
   const db = createServiceClient();
 
   const reply = await processDianaMessage(
-    user.id,
+    actorDesde(user.id, member, role),
     body.message?.trim() ?? "",
     body.channel ?? "web",
     db,
     baseUrl,
-    body.imageBase64,
-    role
+    body.imageBase64
   );
 
   return NextResponse.json({ reply });

@@ -64,6 +64,42 @@ export async function fetchConversations(supabase: SupabaseClient): Promise<Conv
   });
 }
 
+/**
+ * De quién es un chat, preguntándoselo a la base por su id.
+ *
+ * Misma precedencia que `assignedTo`, para el código que no tiene la fila a
+ * mano: el webhook de WhatsApp, que necesita saber a quién avisarle cuando
+ * entra un mensaje.
+ *
+ * Devuelve null cuando el chat no es de nadie — y eso significa avisarle a
+ * nadie, no avisarle a todos: un número que no tiene dueño no es
+ * responsabilidad de nadie en particular.
+ */
+export async function duenoDeConversacion(
+  supabase: SupabaseClient,
+  convId: string
+): Promise<MemberTag> {
+  const conEtiquetas = await supabase
+    .from("conversations")
+    .select("assigned_to, leads(contacted_by), clients(closed_by)")
+    .eq("id", convId)
+    .maybeSingle();
+
+  if (!conEtiquetas.error && conEtiquetas.data) {
+    return assignedTo(conEtiquetas.data as unknown as ConversationRow);
+  }
+
+  // Sin las migraciones de etiquetas (018/021) no hay de dónde sacar el
+  // dueño: mejor no avisar que avisarle a quien no es.
+  const plano = await supabase
+    .from("conversations")
+    .select("assigned_to")
+    .eq("id", convId)
+    .maybeSingle();
+
+  return ((plano.data as { assigned_to?: MemberTag } | null)?.assigned_to ?? null) as MemberTag;
+}
+
 /** Lo que esta persona tiene permitido ver: el Dueño todo, el resto lo suyo. */
 export function scopeConversations(
   conversations: Conversation[],

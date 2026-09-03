@@ -28,6 +28,17 @@ Lo que cuenta para la meta es la **etiqueta**, no la fecha: un contacto sin `con
 
 **Avisos**: asignar una tarea o etiquetar un lead a alguien le manda un Telegram (`src/lib/notify-member.ts`); nunca a uno mismo. Raúl manda un solo aviso por lote.
 
+Cuando **entra** un mensaje de WhatsApp, el aviso va a quien trabaja ese chat — `duenoDeConversacion` en `src/lib/conversation-scope.ts`, la misma precedencia con la que se filtra la lista (`assigned_to` → `leads.contacted_by` → `clients.closed_by`). Antes iba siempre al dueño de la *sesión* de WhatsApp, que es uno solo porque el número lo comparten los cuatro: a los socios no les llegaba nada. Un chat **sin dueño no le suena a nadie**; el dueño de la sesión recibe copia de todo, y las que no son suyas le llegan marcadas con de quién son. Solo lo entrante: lo que alguien escribe desde el celular también pasa por el webhook, y avisaba "te respondieron" por lo que uno mismo acababa de escribir.
+
+**Diana es de cada quien**: los cuatro la usan, pero es asistente personal, no un tablero. El historial ya era privado (`diana_messages` por `owner_id`); desde ahora los datos también. Diana corre con el service client — se salta RLS — así que el filtro va a mano en `src/lib/diana-scope.ts`, y son dos cortes distintos:
+
+- **El rol** decide de qué temas habla: a un Socio ni se le ofrece la tool `get_invoices` y el prompt le dice que los cobros son del Dueño. Aunque el modelo la invente, `runTool` la rechaza.
+- **La persona** decide qué registros ve: `get_leads`, `get_clients` y `get_kpis` traen por defecto lo suyo — los leads que contactó (`contacted_by`), los clientes que cerró (`closed_by`) y su meta de la quincena. Lo que no tiene dueño entra también, igual que en el chat: un lead sin etiquetar lo puede trabajar cualquiera. Si pide el consolidado del equipo, las tools aceptan `alcance="equipo"`. El Dueño ve todo por defecto.
+
+Escribir es más estricto que leer: un Socio solo mueve el estado de sus leads o de los que no tiene nadie, y solo borra eventos del equipo o suyos (mismo criterio que la RLS de `calendar_events`). Si no se puede comprobar de quién es un lead, no se toca — falla cerrado.
+
+El prompt también se arma por persona: antes decía "eres la secretaria de Samuel Montes" a los cuatro, así que Diana trataba a Camilo como al dueño.
+
 **Ediciones simultáneas**: los formularios de lead y cliente mandan el `updated_at` con el que abrieron la ficha; si en la base hay uno más nuevo, la API responde 409 en vez de pisar el cambio ajeno (`src/lib/concurrency.ts`).
 
 **Solo el Dueño** puede cerrar la sesión de WhatsApp: el número lo comparten los cuatro.
@@ -130,6 +141,7 @@ src/
     team.ts               # Los 4 miembros (usuario, nombre, email, color, rol)
     kpi.ts                # Meta de la quincena: 30 contactos (25 en frío, 5 investigados)
     view-as.ts            # Cookie de la vista prestada del Dueño
+    diana-scope.ts        # Qué le muestra Diana a cada persona
     permissions.ts        # Roles owner/partner y qué puede ver cada uno
     auth/session.ts       # getSession / denyIfNotOwner para páginas y API
     cron.ts               # Tarea diaria de facturas (reemplaza al cron de Vercel)

@@ -75,14 +75,26 @@ export async function denyIfNotOwner(): Promise<NextResponse | null> {
 }
 
 /**
- * Rol a partir del id de usuario, para código que corre sin cookies de sesión
- * (webhook de Telegram, crons). Necesita un cliente con service role.
+ * Quién es alguien a partir de su id de usuario, para código que corre sin
+ * cookies de sesión (webhook de Telegram, crons). Necesita service role.
+ *
+ * Devuelve rol y miembro juntos porque Diana necesita los dos: el rol decide
+ * de qué temas puede hablar y el slug decide qué registros son suyos.
  */
-export async function roleForUserId(db: SupabaseClient, userId: string): Promise<Role> {
+export async function identityForUserId(
+  db: SupabaseClient,
+  userId: string
+): Promise<{ role: Role; member: TeamMember | undefined }> {
   try {
     const { data } = await db.auth.admin.getUserById(userId);
-    return roleForEmail(data?.user?.email);
+    const email = data?.user?.email;
+    return { role: roleForEmail(email), member: memberByEmail(email) };
   } catch {
-    return DEFAULT_ROLE;
+    return { role: DEFAULT_ROLE, member: undefined };
   }
+}
+
+/** Solo el rol, para quien no necesita saber de quién se trata. */
+export async function roleForUserId(db: SupabaseClient, userId: string): Promise<Role> {
+  return (await identityForUserId(db, userId)).role;
 }

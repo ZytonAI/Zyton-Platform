@@ -110,9 +110,12 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   /**
-   * Slug de quien trabaja este chat, derivado del lead vinculado
-   * (contacted_by) o del cliente (closed_by). null = sin dueño, lo ve todo
-   * el equipo. Lo calcula el servidor, no es una columna de la tabla.
+   * Slug de quien trabaja este chat. Es una columna propia (migración 021) y
+   * manda sobre la etiqueta del lead vinculado (contacted_by) o del cliente
+   * (closed_by), de las que se hereda cuando está en null. El servidor la
+   * resuelve antes de mandarla al navegador (conversation-scope.ts).
+   *
+   * null = sin dueño: lo ve todo el equipo, pero su chat no le suena a nadie.
    */
   assigned_to?: MemberTag;
 }

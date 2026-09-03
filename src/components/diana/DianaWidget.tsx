@@ -260,34 +260,46 @@ export function DianaWidget() {
                         <>
                           <div className="flex gap-3 items-start">
                             <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</span>
-                            <p>Copia este comando y envíalo al bot de Telegram:</p>
+                            <p>Abre el bot y toca <strong>Iniciar</strong>. Con eso queda vinculado.</p>
                           </div>
 
-                          <div
-                            onClick={copyCommand}
-                            className="cursor-pointer bg-gray-100 rounded-lg px-3 py-2 font-mono text-xs text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors flex items-center justify-between gap-2"
+                          {/*
+                            Enlace profundo de Telegram: al tocar Iniciar, el bot
+                            recibe "/start <token>" solo. Antes había que copiar
+                            el comando y pegarlo a mano, que es donde la gente se
+                            caía — sobre todo desde el celular.
+                          */}
+                          <a
+                            href={`https://t.me/${BOT_USERNAME}?start=${linkToken}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-2 px-4 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
                           >
-                            <span className="truncate">/start {linkToken}</span>
-                            <span className="text-indigo-600 text-[10px] font-sans shrink-0">
-                              {copied ? "✓ Copiado" : "Copiar"}
-                            </span>
-                          </div>
+                            <Send className="w-4 h-4" />
+                            Abrir Telegram y vincular
+                          </a>
 
-                          <div className="flex gap-3 items-start">
-                            <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</span>
-                            <p>
-                              Abre el bot{" "}
-                              <a
-                                href={`https://t.me/${BOT_USERNAME}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-indigo-600 underline font-medium"
+                          {/* Plan B: en un computador sin Telegram instalado el enlace no abre nada */}
+                          <details className="text-xs text-gray-500">
+                            <summary className="cursor-pointer hover:text-gray-700 select-none">
+                              ¿No abrió? Vincular a mano
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                              <p>
+                                Busca <span className="font-medium">@{BOT_USERNAME}</span> en Telegram
+                                y envíale este comando:
+                              </p>
+                              <div
+                                onClick={copyCommand}
+                                className="cursor-pointer bg-gray-100 rounded-lg px-3 py-2 font-mono text-xs text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors flex items-center justify-between gap-2"
                               >
-                                @{BOT_USERNAME}
-                              </a>{" "}
-                              en Telegram y pega el comando.
-                            </p>
-                          </div>
+                                <span className="truncate">/start {linkToken}</span>
+                                <span className="text-indigo-600 text-[10px] font-sans shrink-0">
+                                  {copied ? "✓ Copiado" : "Copiar"}
+                                </span>
+                              </div>
+                            </div>
+                          </details>
 
                           <VerifyButton
                             onConnected={() => { setTelegramConnected(true); setLinkToken(null); }}

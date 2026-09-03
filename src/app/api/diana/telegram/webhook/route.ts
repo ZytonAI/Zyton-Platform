@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { processDianaMessage } from "@/lib/diana-core";
-import { roleForUserId } from "@/lib/auth/session";
+import { identityForUserId } from "@/lib/auth/session";
+import { actorDesde } from "@/lib/diana-scope";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -129,8 +130,10 @@ export async function POST(request: Request) {
   // Procesar mensaje con Diana
   try {
     const baseUrl = new URL(request.url).origin;
-    // Diana corre con service role: el rol decide qué puede consultar
-    const role = await roleForUserId(supabase, profile.id);
+    // Diana corre con service role: el rol decide de qué temas habla y el
+    // slug decide qué registros son suyos (ver src/lib/diana-scope.ts).
+    const { role, member } = await identityForUserId(supabase, profile.id);
+    const actor = actorDesde(profile.id, member, role);
     let reply: string;
 
     if (msg.photo) {
@@ -138,7 +141,7 @@ export async function POST(request: Request) {
       const largest = msg.photo[msg.photo.length - 1];
       const imageUrl = await getTelegramFileUrl(largest.file_id);
       const caption = msg.caption ?? "¿Qué ves en esta imagen?";
-      reply = await processDianaMessage(profile.id, caption, "telegram", supabase, baseUrl, imageUrl, role);
+      reply = await processDianaMessage(actor, caption, "telegram", supabase, baseUrl, imageUrl);
 
     } else if (msg.voice || msg.audio) {
       // Audio: transcribir con Whisper y procesar como texto
@@ -152,11 +155,11 @@ export async function POST(request: Request) {
       }
       // Mostrar el transcript al usuario antes de responder
       await sendTelegramMessage(chatId, `🎤 _"${transcript}"_`);
-      reply = await processDianaMessage(profile.id, transcript, "telegram", supabase, baseUrl, undefined, role);
+      reply = await processDianaMessage(actor, transcript, "telegram", supabase, baseUrl);
 
     } else {
       // Texto normal
-      reply = await processDianaMessage(profile.id, text, "telegram", supabase, baseUrl, undefined, role);
+      reply = await processDianaMessage(actor, text, "telegram", supabase, baseUrl);
     }
 
     await sendTelegramMessage(chatId, reply);

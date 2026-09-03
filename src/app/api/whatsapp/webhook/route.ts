@@ -1,4 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { duenoDeConversacion } from "@/lib/conversation-scope";
+import { notifyMember } from "@/lib/notify-member";
+import { memberBySlug, memberByUsername } from "@/lib/team";
 import { phonesMatch } from "@/lib/phone";
 import { webhookPayloadSchema } from "@/lib/validations/chat.schema";
 import { withColumnFallback } from "@/lib/pg-compat";
@@ -321,24 +324,57 @@ export async function POST(request: Request) {
       .eq("id", convId);
   }
 
-  // Notificar a Diana en Telegram cuando llega un mensaje nuevo
+  // ── Avisar por Telegram a quien trabaja este chat ──
+  //
+  // El aviso iba siempre al dueño de la SESIÓN de WhatsApp — el número lo
+  // comparten los cuatro — así que las respuestas de los chats de todos
+  // sonaban en un solo teléfono y a los socios no les llegaba nada. Ahora va
+  // a quien trabaja la conversación, con la misma regla que filtra la lista
+  // de chats (src/lib/conversation-scope.ts), y el dueño de la sesión
+  // conserva la copia de todo lo que entra.
+  //
+  // Solo lo entrante: lo que sale también pasa por aquí cuando alguien
+  // escribe desde el celular, y avisar "te respondieron" por lo que uno mismo
+  // acaba de escribir no tiene sentido.
   const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (telegramToken && actuallyInserted) {
+  if (telegramToken && actuallyInserted && direction === "inbound") {
+    const senderName = contact_name || contact_phone || wa_chat_id;
+    const preview = displayBody.length > 150 ? displayBody.slice(0, 150) + "..." : displayBody;
+
+    const dueno = await duenoDeConversacion(supabase, convId!);
+
     const { data: profile } = await supabase
       .from("profiles")
-      .select("telegram_chat_id")
+      .select("telegram_chat_id, username")
       .eq("id", owner_id)
-      .single();
+      .maybeSingle();
 
+    const sesion = memberByUsername(profile?.username)?.slug ?? null;
+    // Si el chat es de quien tiene la sesión, le llega una sola vez: la copia
+    const ajeno = dueno !== null && dueno !== sesion;
+
+    // A quien le toca. Un chat sin dueño no le suena a nadie.
+    if (ajeno) {
+      await notifyMember(dueno, `💬 *${senderName}* te respondió:\n\n_${preview}_`);
+    }
+
+    // La copia de todo, para quien tiene la sesión de WhatsApp. Los chats sin
+    // dueño van marcados: a nadie más le sonaron, así que son los que hay que
+    // repartir.
     if (profile?.telegram_chat_id) {
-      const senderName = contact_name || contact_phone || wa_chat_id;
-      const preview = displayBody.length > 150 ? displayBody.slice(0, 150) + "..." : displayBody;
+      const deQuien = ajeno
+        ? ` (chat de ${memberBySlug(dueno)?.name ?? dueno})`
+        : dueno === null
+          ? " (sin asignar)"
+          : "";
       await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: profile.telegram_chat_id,
-          text: `💬 *${senderName}* te ha respondido:\n\n_${preview}_`,
+          text: deQuien
+            ? `💬 *${senderName}* respondió${deQuien}:\n\n_${preview}_`
+            : `💬 *${senderName}* te ha respondido:\n\n_${preview}_`,
           parse_mode: "Markdown",
         }),
       }).catch(() => {});
