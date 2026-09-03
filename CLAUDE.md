@@ -33,9 +33,11 @@ Cuando **entra** un mensaje de WhatsApp, el aviso va a quien trabaja ese chat �
 **Diana es de cada quien**: los cuatro la usan, pero es asistente personal, no un tablero. El historial ya era privado (`diana_messages` por `owner_id`); desde ahora los datos también. Diana corre con el service client — se salta RLS — así que el filtro va a mano en `src/lib/diana-scope.ts`, y son dos cortes distintos:
 
 - **El rol** decide de qué temas habla: a un Socio ni se le ofrece la tool `get_invoices` y el prompt le dice que los cobros son del Dueño. Aunque el modelo la invente, `runTool` la rechaza.
-- **La persona** decide qué registros ve: `get_leads`, `get_clients` y `get_kpis` traen por defecto lo suyo — los leads que contactó (`contacted_by`), los clientes que cerró (`closed_by`) y su meta de la quincena. Lo que no tiene dueño entra también, igual que en el chat: un lead sin etiquetar lo puede trabajar cualquiera. Si pide el consolidado del equipo, las tools aceptan `alcance="equipo"`. El Dueño ve todo por defecto.
+- **La persona** decide qué registros ve: `get_leads`, `get_clients`, `get_todo` y `get_kpis` traen por defecto lo suyo — los leads que contactó (`contacted_by`), los clientes que cerró (`closed_by`) y su meta de la quincena. Lo que no tiene dueño entra también, igual que en el chat: un lead sin etiquetar lo puede trabajar cualquiera. Si pide el consolidado del equipo, las tools aceptan `alcance="equipo"`. El Dueño ve todo por defecto.
 
 Escribir es más estricto que leer: un Socio solo mueve el estado de sus leads o de los que no tiene nadie, y solo borra eventos del equipo o suyos (mismo criterio que la RLS de `calendar_events`). Si no se puede comprobar de quién es un lead, no se toca — falla cerrado.
+
+Diana lee el tablero To Do con `get_todo` (la tabla `tasks`). Antes solo tenía `get_pending_tasks`, que lee `diana_tasks` — las corridas de Raúl, otra cosa — y como el nombre se parecía a la pregunta, contestaba "no tienes nada pendiente" con total seguridad a quien sí tenía tareas sin hacer. Esa tool ahora se llama `get_agent_runs`, para que no se confundan.
 
 El prompt también se arma por persona: antes decía "eres la secretaria de Samuel Montes" a los cuatro, así que Diana trataba a Camilo como al dueño.
 

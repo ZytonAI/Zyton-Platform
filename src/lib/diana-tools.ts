@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { conHoraDeColombia } from "@/lib/event-time";
+import { conHoraDeColombia, fechaHoyColombia } from "@/lib/event-time";
 import type OpenAI from "openai";
 import { canManageBilling, type Role } from "@/lib/permissions";
 import {
@@ -221,9 +221,28 @@ const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "get_pending_tasks",
+      name: "get_todo",
       description:
-        "Consulta las tareas de agentes activadas por Diana: cuáles están corriendo, cuáles terminaron.",
+        "Consulta el tablero To Do: las tareas del equipo con su responsable, fecha y estado. Úsala SIEMPRE que pregunten por tareas, pendientes, qué falta por hacer o qué hay para hoy. Por defecto trae las pendientes de la persona con la que hablas.",
+      parameters: {
+        type: "object",
+        properties: {
+          alcance: ALCANCE_PARAM,
+          incluir_completadas: {
+            type: "boolean",
+            description: "Si es true incluye también las ya completadas. Por defecto solo las pendientes.",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_agent_runs",
+      description:
+        "Consulta las corridas de los agentes que Diana activó (Raúl buscando leads): cuáles están corriendo y cuáles terminaron. NO son las tareas del tablero To Do — para eso usa get_todo.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -647,7 +666,7 @@ export async function runTool(
         });
       }
 
-      case "get_pending_tasks": {
+      case "get_agent_runs": {
         const { data, error } = await supabase
           .from("diana_tasks")
           .select("id,agent,status,params,result_summary,created_at,completed_at")
@@ -657,6 +676,46 @@ export async function runTool(
 
         if (error) return `Error: ${error.message}`;
         return JSON.stringify(data ?? []);
+      }
+
+      case "get_todo": {
+        // El tablero vive en `tasks` (migración 014) y es otra cosa que
+        // `diana_tasks`, que son las corridas de Raúl. Antes Diana solo leía
+        // esa segunda y respondía "no tienes nada pendiente" con total
+        // seguridad a quien sí tenía tareas sin hacer.
+        const todos = leeTodo(actor, alcance);
+
+        // `tasks.assignee` es NOT NULL: aquí no existe el caso "sin dueño",
+        // así que si no sabemos quién pregunta no se adivina.
+        if (!todos && !actor.slug) {
+          return "No puedo saber cuáles tareas son tuyas: tu usuario no está en la lista del equipo.";
+        }
+
+        let query = supabase
+          .from("tasks")
+          .select("id,title,description,assignee,due_date,status")
+          .order("due_date", { ascending: true, nullsFirst: false });
+
+        if (!todos) query = query.eq("assignee", actor.slug!);
+        if (args.incluir_completadas !== true) query = query.neq("status", "done");
+
+        const { data, error } = await query;
+        if (error) return `Error consultando el tablero To Do: ${error.message}`;
+        if (!data || data.length === 0) {
+          return todos
+            ? "El tablero no tiene tareas pendientes."
+            : `${actor.nombre} no tiene tareas pendientes en el tablero.`;
+        }
+
+        const hoy = fechaHoyColombia();
+        return JSON.stringify(
+          data.map((t) => ({
+            ...t,
+            // Una tarea con fecha pasada y sin completar está vencida: en el
+            // tablero se pinta en rojo y conviene que Diana lo diga igual.
+            vencida: !!t.due_date && t.due_date < hoy && t.status !== "done",
+          }))
+        );
       }
 
       case "delete_calendar_event": {
