@@ -22,7 +22,7 @@ Lo que cuenta para la meta es la **etiqueta**, no la fecha: un contacto sin `con
 
 **Calendario y Wiki**: cada evento y cada página es `team` (lo ve el equipo, default) o `personal` (solo quien lo creó, garantizado por RLS). Migraciones 018 y 019.
 
-**`contacted_by` no es "lo contactó"**: es quién *trabaja* el lead. Raúl se lo pone a todo lo que encuentra, así que contar por ahí decía que Daniel había contactado 110 cuando había escrito a 5. Quien de verdad fue contactado es el que tiene `contacted_at`; el Dashboard muestra las dos cosas por separado — "Por trabajar" (asignados) y "Contactados" (con fecha).
+**`contacted_by` no es "lo contactó"**: es quién *trabaja* el lead. Raúl se lo pone a todo lo que encuentra, así que contar por ahí decía que Daniel había contactado 110 cuando había escrito a 5. Quien de verdad fue contactado es el que tiene `contacted_at`, y es lo único que cuenta el Dashboard. El número de asignados no se muestra: al lado del nombre se leía como "contactó a 112" cuando había escrito a 7.
 
 **Quién hizo qué**: `owner_id` (creador) se traduce a persona con `src/lib/directory.ts` y se pinta en el historial, los adjuntos, los mensajes de WhatsApp salientes, la Wiki y las fichas. El contexto de sesión (`SessionContext`) lleva rol, slug propio y ese directorio.
 

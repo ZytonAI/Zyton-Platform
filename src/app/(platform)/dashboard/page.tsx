@@ -225,19 +225,19 @@ export default async function DashboardPage() {
 
   const perMember: TotalesMiembro[] = TEAM_MEMBERS.map((member) => {
     // `contacted_by` dice quién TRABAJA el lead, no quién lo contactó: Raúl se
-    // lo pone a todo lo que encuentra, así que contar por ahí daba 110
-    // "contactados" a quien había escrito a 5. Quien de verdad fue contactado
-    // es el que tiene fecha — la sella la base al etiquetarlo o al abrirle el
-    // chat (migraciones 022 y 023).
-    const asignados = leadTags.filter((l) => l.contacted_by === member.slug);
-    const contactados = asignados.filter((l) => l.contacted_at);
+    // lo pone a todo lo que encuentra. Quien de verdad fue contactado es el
+    // que tiene fecha — la sella la base al etiquetarlo o al abrirle el chat
+    // (migraciones 022 y 023). El conteo de asignados ya no se muestra: al
+    // lado del nombre se leía como "contactó a 112" cuando eran 7.
+    const contactados = leadTags.filter(
+      (l) => l.contacted_by === member.slug && l.contacted_at
+    );
     const won = leadTags.filter((l) => l.closed_by === member.slug && l.status === "converted");
     const activeClients = clientTags.filter(
       (c) => c.closed_by === member.slug && c.status === "active"
     );
     return {
       member,
-      asignados: asignados.length,
       contacted: contactados.length,
       won: won.length,
       clients: activeClients.length,
