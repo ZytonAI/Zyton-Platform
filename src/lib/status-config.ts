@@ -4,7 +4,7 @@
 // estado. Se adopta el lenguaje de ventas que ya veía el usuario en Leads.
 
 import {
-  UserX, UserCheck, CalendarClock, ThumbsUp, ThumbsDown, ShoppingCart,
+  UserX, UserCheck, Hourglass, CalendarClock, ThumbsUp, ThumbsDown, ShoppingCart,
   ArrowUpCircle, ArrowDownCircle,
 } from "lucide-react";
 import type {
@@ -19,7 +19,7 @@ export interface StatusConfig {
 }
 
 export const LEAD_STATUS_ORDER: LeadStatus[] = [
-  "new", "contacted", "scheduled", "qualified", "lost", "converted",
+  "new", "contacted", "follow_up", "scheduled", "qualified", "lost", "converted",
 ];
 
 export const LEAD_STATUS: Record<LeadStatus, StatusConfig> = {
@@ -32,6 +32,11 @@ export const LEAD_STATUS: Record<LeadStatus, StatusConfig> = {
     label: "Contactado",
     badgeClass: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
     icon: UserCheck,
+  },
+  follow_up: {
+    label: "Seguimiento pendiente",
+    badgeClass: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
+    icon: Hourglass,
   },
   scheduled: {
     label: "Programado",

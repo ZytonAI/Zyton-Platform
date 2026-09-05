@@ -33,7 +33,7 @@ ZytonAI es una agencia digital especializada en IA aplicada a pequeños y median
 Es el sistema de gestión interno de ZytonAI. Todo el negocio pasa por aquí:
 
 **Leads**: Prospectos encontrados en Google Maps por el agente Raúl. Flujo de estados:
-  new → contacted → scheduled → qualified → converted (se vuelven cliente) o lost.
+  new → contacted → follow_up (seguimiento pendiente: ya se le escribió y hay que volver a escribirle) → scheduled → qualified → converted (se vuelven cliente) o lost.
   Cada lead puede tener: nombre, teléfono, sitio web, categoría (notes), prioridad (alta/media/baja).
 
 **Clientes**: Leads que contrataron servicios. Tienen contrato con fecha inicio/fin.

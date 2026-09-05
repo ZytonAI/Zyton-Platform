@@ -112,7 +112,7 @@ interface Props {
   onReassigned?: () => void;
 }
 
-type LeadStatus = "new" | "contacted" | "scheduled" | "qualified" | "lost" | "converted";
+type LeadStatus = "new" | "contacted" | "follow_up" | "scheduled" | "qualified" | "lost" | "converted";
 
 export function MessageThread({ conversation, onBack, onReassigned }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);

@@ -39,8 +39,8 @@ const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           alcance: ALCANCE_PARAM,
           status: {
             type: "string",
-            enum: ["new", "contacted", "scheduled", "qualified", "lost", "converted"],
-            description: "Filtrar por estado del lead",
+            enum: ["new", "contacted", "follow_up", "scheduled", "qualified", "lost", "converted"],
+            description: "Filtrar por estado del lead (follow_up = seguimiento pendiente)",
           },
           priority: {
             type: "string",
@@ -183,8 +183,8 @@ const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
           },
           status: {
             type: "string",
-            enum: ["new", "contacted", "scheduled", "qualified", "lost", "converted"],
-            description: "Nuevo estado",
+            enum: ["new", "contacted", "follow_up", "scheduled", "qualified", "lost", "converted"],
+            description: "Nuevo estado (follow_up = seguimiento pendiente)",
           },
         },
         required: ["lead_ids", "status"],

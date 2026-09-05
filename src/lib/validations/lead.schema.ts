@@ -10,7 +10,7 @@ export const leadSchema = z.object({
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   company: z.string().optional().or(z.literal("")),
-  status: z.enum(["new", "contacted", "scheduled", "qualified", "lost", "converted"]),
+  status: z.enum(["new", "contacted", "follow_up", "scheduled", "qualified", "lost", "converted"]),
   source: z.string().optional().or(z.literal("")),
   priority: z.enum(["alta", "media", "baja"]).nullable().optional(),
   website: z.string().optional().or(z.literal("")),

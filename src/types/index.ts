@@ -1,7 +1,7 @@
 import type { TeamSlug } from "@/lib/team";
 import type { ContactType } from "@/lib/kpi";
 
-export type LeadStatus = "new" | "contacted" | "scheduled" | "qualified" | "lost" | "converted";
+export type LeadStatus = "new" | "contacted" | "follow_up" | "scheduled" | "qualified" | "lost" | "converted";
 
 /**
  * Etiqueta de persona: el slug de un miembro del equipo (ver src/lib/team.ts)

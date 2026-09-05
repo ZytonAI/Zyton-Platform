@@ -33,6 +33,7 @@ const FILTERS: { label: string; value: string }[] = [
   { label: "Todos",          value: "all" },
   { label: "Sin contactar",  value: "new" },
   { label: "Contactados",    value: "contacted" },
+  { label: "En seguimiento", value: "follow_up" },
   { label: "Programados",    value: "scheduled" },
   { label: "Interesados",    value: "qualified" },
   { label: "No interesados", value: "lost" },
@@ -306,7 +307,7 @@ export function LeadsClient({ initialLeads }: Props) {
     <div className="p-5 space-y-5">
 
       {/* ── KPIs ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         {STATUS_ORDER.map((s) => {
           const Icon = LEAD_STATUS[s].icon!;
           const count = kpis.byStatus[s];

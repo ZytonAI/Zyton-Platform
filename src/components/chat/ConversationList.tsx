@@ -233,6 +233,7 @@ export function ConversationList({
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             Se eliminará la conversación y todos sus mensajes. Esta acción no se puede deshacer.
+            El lead y su etiqueta de contacto (en frío / con investigación) se conservan.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeletingId(null)} disabled={deleteLoading}>
