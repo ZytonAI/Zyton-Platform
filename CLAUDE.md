@@ -22,6 +22,17 @@ Lo que cuenta para la meta es la **etiqueta**, no la fecha: un contacto sin `con
 
 **Estados del lead**: `new` → `contacted` → `follow_up` → `scheduled` → `qualified` → `converted` | `lost` (labels en `src/lib/status-config.ts`, que es la fuente única). `follow_up` ("Seguimiento pendiente", migración 025) es el caso más común de la prospección en frío: ya se le escribió y hay que volver a escribirle — antes esos leads se quedaban revueltos con los `contacted` que nunca contestaron. Cuenta como contactado: sella `contacted_at` igual que los demás estados de contactado.
 
+**Raúl no guarda todo lo que encuentra**: entre Google Maps y el CRM hay un filtro (`src/lib/lead-filter.ts`). Maps devuelve la panadería de la esquina y el hospital universitario en la misma lista; meter todo eso llenaba los leads de gente a la que no le podemos vender nada y escondía a la que sí. El filtro son dos pasos:
+
+1. **Sondeo de la web** (`sondearWeb`): se abre la página de cada negocio y se sacan señales duras — qué plataforma es (Wix, WordPress, Shopify, Google Sites…), si es responsive, si tiene HTTPS, cuántos scripts, qué año dice el pie, si es en realidad un perfil de Facebook. Con la URL sola el modelo no puede saber si la web está bien hecha, y eso es justo el criterio. De a 8 en paralelo, 6 s de timeout; un fallo no descarta al lead, solo se dice "no se pudo abrir".
+2. **El juicio** (`filtrarCandidatos`): esas señales más los datos de Maps (reseñas, calificación, fotos, si está cerrado) van a `gpt-4o-mini`, que puntúa el encaje de 0 a 100 y lo explica en una frase. El punto dulce es el negocio **pequeño, local, activo y con presencia digital floja**: cadenas y webs ya profesionales bajan, negocios muertos también.
+
+Solo los que pasan el umbral se insertan; el resto se le muestra al usuario con su motivo (para poder ajustar la exigencia) y no toca la base. El puntaje se guarda en `leads.fit_score` / `fit_reason` (migración 026) y alimenta la `priority` que ya existía: ≥75 alta, ≥60 media, resto baja.
+
+**El filtro falla abierto, a propósito**: sin `OPENAI_API_KEY`, si OpenAI se cae o si el modelo se salta un candidato, el lead **entra** con la nota de que no se evaluó. Perder un lead bueno por un fallo de infraestructura es peor que revisar uno malo a mano. Lo único que se descarta sin preguntarle al modelo es lo determinista: cerrado permanentemente, y los sin web cuando el usuario apagó ese switch (esa es decisión suya, no puede depender de que el modelo obedezca el prompt).
+
+**Buscar por barrio, no por ciudad**: Maps corta cada consulta en pocos resultados, así que "dentistas en Bogotá" devuelve siempre el centro y las cadenas. El campo "Barrio o zona" arma la consulta como `dentistas en Modelia, Bogotá Colombia` — texto libre que el actor de Apify pasa tal cual al buscador, no hizo falta cambiar de API. Barrio por barrio se llega a negocios que la búsqueda general nunca muestra, que es de donde sale el volumen. Diana también lo acepta en `activate_agent`.
+
 **Calendario y Wiki**: cada evento y cada página es `team` (lo ve el equipo, default) o `personal` (solo quien lo creó, garantizado por RLS). Migraciones 018 y 019.
 
 **`contacted_by` no es "lo contactó"**: es quién *trabaja* el lead. Raúl se lo pone a todo lo que encuentra, así que contar por ahí decía que Daniel había contactado 110 cuando había escrito a 5. Quien de verdad fue contactado es el que tiene `contacted_at`, y es lo único que cuenta el Dashboard. El número de asignados no se muestra: al lado del nombre se leía como "contactó a 112" cuando había escrito a 7.
@@ -132,7 +143,7 @@ src/
       clients/            # CRUD
       attachments/        # Upload a Supabase Storage
       diana/              # Chat de Diana, Telegram y cron de facturas
-      agents/             # Raúl (busca leads en Google Places)
+      agents/             # Raúl (busca leads en Google Places y los filtra con IA)
       whatsapp/           # Proxy al WA service
       view-as/            # El Dueño entra/sale de la vista de un Socio
   components/
@@ -144,6 +155,7 @@ src/
   lib/
     team.ts               # Los 4 miembros (usuario, nombre, email, color, rol)
     kpi.ts                # Meta de la quincena: 55 contactos (50 en frío, 5 investigados)
+    lead-filter.ts        # Sondea la web y puntúa con IA lo que trae Raúl, antes de guardarlo
     view-as.ts            # Cookie de la vista prestada del Dueño
     diana-scope.ts        # Qué le muestra Diana a cada persona
     permissions.ts        # Roles owner/partner y qué puede ver cada uno

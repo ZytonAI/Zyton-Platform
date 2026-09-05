@@ -24,6 +24,10 @@ export interface Lead {
   maps_url: string | null;
   analyzed: boolean;
   priority: "alta" | "media" | "baja" | null;
+  /** 0–100: qué tanto encaja como cliente, según el filtro de IA de Raúl */
+  fit_score: number | null;
+  /** La frase con la que el filtro justificó dejarlo entrar */
+  fit_reason: string | null;
   /** Cómo fue el contacto: en frío o con investigación previa — KPI de la quincena */
   contact_type: ContactType | null;
   /** Cuándo se contactó; decide en qué quincena cae para el KPI */
@@ -160,6 +164,14 @@ export interface ApifyLead {
 
 export type AgentEventType = "status" | "progress" | "result" | "error" | "done";
 
+/** Un negocio que Raúl encontró pero el filtro no dejó entrar al CRM. */
+export interface LeadDescartado {
+  nombre: string;
+  score: number;
+  motivo: string;
+  tamano: "micro" | "pequeno" | "mediano" | "grande" | null;
+}
+
 export interface AgentEvent {
   type: AgentEventType;
   message?: string;
@@ -169,6 +181,13 @@ export interface AgentEvent {
   lead_id?: string;
   current?: number;
   total?: number;
+  /** Cuántos negocios con teléfono llegaron al filtro */
+  revisados?: number;
+  /** Los que no pasaron, con el motivo, para poder ajustar la exigencia */
+  descartados?: LeadDescartado[];
+  sinContacto?: number;
+  sinWeb?: number;
+  conWeb?: number;
 }
 
 export type InvoiceStatus = "pending" | "paid" | "overdue";

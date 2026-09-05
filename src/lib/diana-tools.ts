@@ -213,6 +213,11 @@ const DIANA_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
             type: "string",
             description: "Ciudad donde buscar (ej: 'Medellín Colombia')",
           },
+          barrio: {
+            type: "string",
+            description:
+              "Barrio o zona de la ciudad, opcional (ej: 'Modelia', 'Chapinero'). Buscar por barrio saca negocios que la búsqueda por ciudad no alcanza.",
+          },
         },
         required: ["agent"],
       },
@@ -633,6 +638,7 @@ export async function runTool(
           return "Para activar a Raúl necesito el tipo de negocio y la ciudad.";
         params.tipo = args.tipo as string;
         params.ciudad = args.ciudad as string;
+        if (args.barrio) params.barrio = args.barrio as string;
 
         // Guardar la tarea en diana_tasks (usando service role no disponible aquí, usamos anon con RLS)
         const { data: task, error: taskErr } = await supabase
