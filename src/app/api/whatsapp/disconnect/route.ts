@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth/session";
 import { isOwner } from "@/lib/permissions";
 import { getWorkspaceSession } from "@/lib/wa-session";
 import { disconnectBridge } from "@/lib/wa-bridge";
+import { createServiceClient } from "@/lib/supabase/service";
+import { silenciarProximaCaida } from "@/lib/wa-alert";
 
 export async function POST() {
   const supabase = await createClient();
@@ -30,6 +32,10 @@ export async function POST() {
         .update({ status: "disconnected", phone: null, updated_at: new Date().toISOString() })
         .eq("id", session.id);
     }
+
+    // Si el Dueño la cerró a propósito, que no le llegue el Telegram
+    // diciéndole que WhatsApp se cayó: acaba de hacerlo él.
+    await silenciarProximaCaida(createServiceClient());
 
     return NextResponse.json({ ok: true });
   } catch (err) {

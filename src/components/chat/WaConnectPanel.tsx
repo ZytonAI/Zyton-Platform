@@ -10,6 +10,9 @@ interface StatusResponse {
   status: WaSessionStatus;
   qr: string | null;
   phone: string | null;
+  /** Solo el Dueño vincula el número del equipo; al resto el servidor ni les
+   *  manda el QR (ver /api/whatsapp/status). */
+  can_scan?: boolean;
 }
 
 interface Props {
@@ -18,9 +21,15 @@ interface Props {
 }
 
 export function WaConnectPanel({ onConnected, suppressConnect = false }: Props) {
-  const [data, setData] = useState<StatusResponse>({ status: "disconnected", qr: null, phone: null });
+  const [data, setData] = useState<StatusResponse>({
+    status: "disconnected", qr: null, phone: null, can_scan: false,
+  });
   const [loading, setLoading] = useState(true);
   const [reconnecting, setReconnecting] = useState(false);
+  // Si el servidor no ha contestado todavía no sabemos de quién es esta
+  // pantalla. Sin esta bandera, un poll fallido dejaba `can_scan` en false y
+  // al Dueño le salía por un momento el mensaje de "avísale a Samuel".
+  const [respondio, setRespondio] = useState(false);
 
   const poll = useCallback(async () => {
     try {
@@ -28,6 +37,7 @@ export function WaConnectPanel({ onConnected, suppressConnect = false }: Props) 
       if (res.ok) {
         const json: StatusResponse = await res.json();
         setData(json);
+        setRespondio(true);
         if (json.status === "connected" && !suppressConnect) {
           onConnected();
         }
@@ -67,6 +77,29 @@ export function WaConnectPanel({ onConnected, suppressConnect = false }: Props) 
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
         <p className="text-muted-foreground">Verificando sesión...</p>
+      </div>
+    );
+  }
+
+  // Un Socio no puede hacer nada con esta pantalla: ni QR ni botón de
+  // reconectar. En vez de un muro de botones muertos, se le dice qué pasa y
+  // que el aviso ya salió — el chequeo de fondo le escribe al Dueño solo.
+  if (respondio && !data.can_scan) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-6 text-center px-6">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-500/15 flex items-center justify-center">
+          <WifiOff className="w-7 h-7 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div className="max-w-sm">
+          <h2 className="text-xl font-semibold text-foreground">WhatsApp está desconectado</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            El número lo comparte todo el equipo y solo Samuel puede volver a vincularlo.
+            Ya le llegó el aviso; en cuanto lo reconecte, esta pantalla pasa sola al chat.
+          </p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Mientras tanto no entran ni salen mensajes por la plataforma.
+        </p>
       </div>
     );
   }

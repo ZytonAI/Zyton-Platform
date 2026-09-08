@@ -77,6 +77,15 @@ export function memberByEmail(email?: string | null): TeamMember | undefined {
   return TEAM_MEMBERS.find((m) => m.email.toLowerCase() === email.toLowerCase());
 }
 
+/**
+ * El Dueño. Los avisos que son de él y de nadie más (WhatsApp caído, los
+ * recordatorios de cobros) salen de aquí en vez de llevar "samuel" escrito a
+ * mano: si el rol cambia de persona, el aviso lo sigue.
+ */
+export function teamOwner(): TeamMember | undefined {
+  return TEAM_MEMBERS.find((m) => m.role === "owner");
+}
+
 export function memberByUsername(username?: string | null): TeamMember | undefined {
   if (!username) return undefined;
   return TEAM_MEMBERS.find((m) => m.username.toLowerCase() === username.toLowerCase());

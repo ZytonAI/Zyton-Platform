@@ -56,7 +56,13 @@ El prompt también se arma por persona: antes decía "eres la secretaria de Samu
 
 **Ediciones simultáneas**: los formularios de lead y cliente mandan el `updated_at` con el que abrieron la ficha; si en la base hay uno más nuevo, la API responde 409 en vez de pisar el cambio ajeno (`src/lib/concurrency.ts`).
 
-**Solo el Dueño** puede cerrar la sesión de WhatsApp: el número lo comparten los cuatro.
+**El WhatsApp del equipo es del Dueño**: el número lo comparten los cuatro, así que vincularlo o cerrarlo afecta a todos. Solo el Dueño puede desconectarlo (`/api/whatsapp/disconnect`), reconectarlo (`/api/whatsapp/reconnect`) y **ver el QR** — `/api/whatsapp/status` se lo manda solo a él y devuelve `can_scan` para que la pantalla sepa qué pintar. A un Socio, con el chat caído, le sale "solo Samuel puede vincularlo, ya le avisamos" en vez de un QR y un botón muerto.
+
+Esconderlo en la interfaz no bastaba: el QR se guardaba en `wa_sessions.qr_code`, y esa tabla la leen los cuatro (migración 013, "team full access"), así que cualquiera con la anon key podía sacarlo y enlazar su propio celular al número de la empresa. Desde la migración 027 **el QR no se persiste**: va del bridge al navegador del Dueño y no queda en ningún lado.
+
+**Aviso de WhatsApp caído**: cuando la sesión se cae, Diana le escribe por Telegram al Dueño y a nadie más (`src/lib/wa-alert.ts`). El chequeo no puede vivir en el bridge — `whatsapp-service/` está congelado — así que lo hace el CRM preguntándole el estado, por dos vías: el cron interno cada 2 minutos (que es lo que hace que sirva de madrugada, con la plataforma cerrada) y el propio poll de la pantalla de chat, que ya preguntaba cada 5 s.
+
+Tres detalles que lo hacen usable: **espera 3 minutos** antes de avisar (`down_since`), porque un redespliegue o un parpadeo de red dejan el bridge caído unos segundos y el aviso que suena por todo acaba ignorándose; **avisa una sola vez** por caída (`alerted_at`, reclamado con un `UPDATE ... WHERE alerted_at IS NULL`, que en Postgres es atómico: con cuatro pestañas abiertas sale un solo mensaje); y **manda un "ya volvió"** cuando se reconecta, pero solo si antes avisó de la caída. Que el bridge no conteste cuenta como caída: el equipo se queda sin escribir igual. Si el Dueño la cierra él mismo con el botón, no le llega nada — la ruta de desconectar marca la racha como ya avisada.
 
 **Roles**: hay dos, definidos en `src/lib/permissions.ts`.
 
@@ -111,7 +117,7 @@ npm run lint     # ESLint
 
 **Deploy**: EasyPanel construye el `Dockerfile` de la raíz (multi-stage, `output: "standalone"` en `next.config.ts`). Las `NEXT_PUBLIC_*` se incrustan en el bundle durante el build → van como **build args**, no como variables de runtime. Detalle en el [README](README.md).
 
-**Cron**: `/api/diana/invoice-reminder` lo dispara la propia app. `src/instrumentation.ts` corre una vez al arrancar el servidor y programa la tarea diaria en `src/lib/cron.ts` (default 14:00 UTC = 9:00 a.m. Colombia). Necesita `CRON_SECRET`; se ajusta con `INVOICE_REMINDER_AT` y se apaga con `DISABLE_CRON=1`. Ver README.
+**Cron**: lo dispara la propia app. `src/instrumentation.ts` corre una vez al arrancar el servidor y `src/lib/cron.ts` programa dos tareas: el recordatorio de facturas (`/api/diana/invoice-reminder`, diario, default 14:00 UTC = 9:00 a.m. Colombia) y el chequeo de la sesión de WhatsApp (`/api/whatsapp/health`, cada 2 minutos, en silencio salvo cuando avisa). Las dos necesitan `CRON_SECRET`; la hora del recordatorio se ajusta con `INVOICE_REMINDER_AT` y todo se apaga con `DISABLE_CRON=1`. Ver README.
 
 ## Variables de entorno requeridas
 
@@ -167,6 +173,7 @@ src/
     concurrency.ts        # 409 si dos personas editan el mismo registro
     notify-member.ts      # Avisos de "te asignaron esto" por Telegram
     pg-compat.ts          # Reintenta sin la columna si falta la migración
+    wa-alert.ts           # Avisa al Dueño por Telegram cuando WhatsApp se cae
     wa-destino.ts         # Resuelve y guarda el @lid de un chat en el primer envío
     wa-session.ts         # Sesión de WhatsApp del workspace (una sola)
     supabase/client.ts    # Browser client (anon key)

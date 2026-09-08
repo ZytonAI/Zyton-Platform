@@ -9,14 +9,24 @@
  * levantar el servidor (solo en el runtime de Node, nunca en Edge ni en el
  * navegador).
  *
- * Tarea única por ahora: el recordatorio diario de facturas, que recicla las
- * recurrentes, pasa las vencidas a `overdue` y le avisa al Dueño por Telegram.
+ * Dos tareas:
+ *   - el recordatorio diario de facturas, que recicla las recurrentes, pasa
+ *     las vencidas a `overdue` y le avisa al Dueño por Telegram;
+ *   - el chequeo de la sesión de WhatsApp cada pocos minutos, que le avisa al
+ *     Dueño cuando el número del equipo se desconecta. Va aquí y no en el
+ *     navegador porque una caída de madrugada, con la plataforma cerrada, no
+ *     la vería nadie hasta la mañana siguiente.
  */
 
 /** Hora UTC por defecto — 14:00 UTC = 9:00 a.m. en Colombia (igual que el cron viejo de Vercel). */
 const DEFAULT_AT = "14:00";
 
 const TASK_PATH = "/api/diana/invoice-reminder";
+
+/** Chequeo de WhatsApp. Cada 2 minutos: con los 3 de gracia del propio
+ *  chequeo (src/lib/wa-alert.ts), el aviso sale a los ~5 de la caída. */
+const WA_HEALTH_PATH = "/api/whatsapp/health";
+const WA_HEALTH_EVERY_MS = 2 * 60_000;
 
 // El módulo puede evaluarse más de una vez (HMR en dev, varios entrypoints en
 // el build), así que la bandera va en globalThis para no duplicar el timer.
@@ -60,22 +70,22 @@ function formatWait(ms: number): string {
  * Llama a la ruta como lo haría un cron externo — mismo header, mismo camino.
  * Se pega al propio servidor por loopback, así que no sale de la red interna.
  */
-async function runInvoiceReminder(secret: string): Promise<void> {
+async function runTask(name: string, path: string, secret: string, quiet = false): Promise<void> {
   const port = process.env.PORT ?? "3000";
-  const url = `http://127.0.0.1:${port}${TASK_PATH}`;
+  const url = `http://127.0.0.1:${port}${path}`;
 
   try {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${secret}` },
     });
     const body = await res.text().catch(() => "");
-    if (res.ok) {
-      console.log(`[cron] invoice-reminder ok — ${body}`);
-    } else {
-      console.error(`[cron] invoice-reminder respondió ${res.status} — ${body}`);
+    if (!res.ok) {
+      console.error(`[cron] ${name} respondió ${res.status} — ${body}`);
+    } else if (!quiet) {
+      console.log(`[cron] ${name} ok — ${body}`);
     }
   } catch (err) {
-    console.error("[cron] invoice-reminder falló:", err);
+    console.error(`[cron] ${name} falló:`, err);
   }
 }
 
@@ -113,7 +123,7 @@ export function startCron(): void {
   const schedule = () => {
     const wait = msUntil(hour, minute);
     const timer = setTimeout(async () => {
-      await runInvoiceReminder(secret);
+      await runTask("invoice-reminder", TASK_PATH, secret);
       schedule();
     }, wait);
     // Que un timer pendiente no impida apagar el contenedor
@@ -124,4 +134,15 @@ export function startCron(): void {
   };
 
   schedule();
+
+  // El chequeo de WhatsApp corre en silencio: son 720 llamadas al día y todas
+  // dicen lo mismo. Solo se imprime lo que no sea "todo bien" — un fallo de la
+  // ruta, o la corrida en la que de verdad se manda el aviso.
+  const waTimer = setInterval(() => {
+    void runTask("wa-health", WA_HEALTH_PATH, secret, true);
+  }, WA_HEALTH_EVERY_MS);
+  waTimer.unref?.();
+  console.log(
+    `[cron] chequeo de WhatsApp cada ${WA_HEALTH_EVERY_MS / 60_000} min — avisa al Dueño si se cae.`
+  );
 }
