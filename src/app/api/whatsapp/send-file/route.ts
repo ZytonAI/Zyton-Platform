@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth/session";
+import { sellarContactoAlEnviar } from "@/lib/lead-contacto";
 import { withColumnFallback } from "@/lib/pg-compat";
 import { mensajeDeErrorLegible, sendBridgeFile } from "@/lib/wa-bridge";
 import { resolverDestinoConversacion } from "@/lib/wa-destino";
@@ -8,7 +10,8 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // El mismo criterio que en /send: cuenta quien lo manda de verdad
+  const { user, realMember } = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = sendFileSchema.safeParse(await request.json().catch(() => null));
@@ -162,6 +165,9 @@ export async function POST(request: Request) {
       .from("conversations")
       .update({ last_message: body, last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq("id", conversation_id);
+
+    // Mandar un archivo también es contactar (src/lib/lead-contacto.ts)
+    await sellarContactoAlEnviar(supabase, conv, realMember?.slug);
 
     return NextResponse.json(msg, { status: 201 });
   } catch (err) {

@@ -91,9 +91,12 @@ export function ConversationList({
       const res = await fetch(`/api/whatsapp/conversations/${deletingId}`, { method: "DELETE" });
       if (res.ok) {
         onDeleteConversation(deletingId);
-        toast.success("Chat eliminado");
+        toast.success("Chat eliminado — el contacto quedó en la ficha del lead");
       } else {
-        toast.error("Error eliminando el chat");
+        // El servidor se niega a borrar si no pudo guardar el historial: ese
+        // motivo hay que leerlo, no taparlo con un "error" genérico.
+        const { error } = await res.json().catch(() => ({ error: null }));
+        toast.error(error ?? "Error eliminando el chat");
       }
     } catch {
       toast.error("Error de conexión");
@@ -233,7 +236,11 @@ export function ConversationList({
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             Se eliminará la conversación y todos sus mensajes. Esta acción no se puede deshacer.
-            El lead y su etiqueta de contacto (en frío / con investigación) se conservan.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            El lead se conserva con su estado, quién lo contactó y su etiqueta (en frío / con
+            investigación), así que el KPI de la quincena no se mueve. En su ficha queda anotado
+            que hubo chat, cuántos mensajes fueron y cómo terminó.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeletingId(null)} disabled={deleteLoading}>

@@ -25,9 +25,11 @@ export async function GET() {
 }
 
 /**
- * Quien abre el chat de un lead que nadie había contactado queda como
- * `contacted_by`. Así la vista personal de WhatsApp se llena sola, sin que
- * haya que ir a etiquetar el lead a mano.
+ * Quien abre el chat de un lead que no es de nadie se lo queda (`contacted_by`),
+ * para que la vista personal de WhatsApp se llene sola sin ir a etiquetar a
+ * mano. Es un reparto, **no un contacto**: abrir un chat para leer lo que se
+ * habló no cuenta para el KPI, y desde la migración 028 tampoco sella la fecha.
+ * El contacto lo sella enviar (`src/lib/lead-contacto.ts`).
  */
 async function tagLeadContactedBy(
   supabase: Awaited<ReturnType<typeof createClient>>,

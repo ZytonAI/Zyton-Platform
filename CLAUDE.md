@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Equipo (4 personas)**: Samuel, Camilo, Santiago y Daniel. Es un workspace **compartido**: los cuatro ven y editan los mismos leads, clientes, calendario, wiki, chat y tareas. `owner_id` sigue en las tablas como autoría (quién creó el registro), pero ya no restringe visibilidad. Lo único personal es el historial de Diana (`diana_messages`, `diana_tasks`, `diana_action_log`).
 
-**Etiquetas de equipo**: leads y clientes llevan el slug de quién los trabaja — `leads.contacted_by / closed_by / scheduled_by` y `clients.closed_by / scheduled_by` (migración 018). De ahí sale el filtro del chat: una conversación es de quien contactó su lead (o cerró su cliente); las que no tienen dueño las ven los cuatro. Abrir el chat de un lead sin etiqueta lo marca automáticamente como contactado por quien lo abrió.
+**Etiquetas de equipo**: leads y clientes llevan el slug de quién los trabaja — `leads.contacted_by / closed_by / scheduled_by` y `clients.closed_by / scheduled_by` (migración 018). De ahí sale el filtro del chat: una conversación es de quien contactó su lead (o cerró su cliente); las que no tienen dueño las ven los cuatro. Abrir el chat de un lead sin dueño se lo asigna a quien lo abrió — asignarlo, nada más: **contactar es enviar** (migración 028).
 
 El chat además tiene su propia etiqueta, `conversations.assigned_to` (migración 021), que manda sobre la del lead: un número que todavía no es lead también se puede repartir. Asignar desde el hilo escribe las dos cuando hay lead.
 
@@ -16,7 +16,13 @@ El chat además tiene su propia etiqueta, `conversations.assigned_to` (migració
 
 Lo que cuenta para la meta es la **etiqueta**, no la fecha: un contacto sin `contact_type` no suma ni en el total ni en ninguna de las dos sub-metas, solo aparece como "sin etiquetar · no cuentan". Así, quitarle la etiqueta a un lead lo descuenta de las dos cuentas a la vez.
 
-`contacted_at` la pone sola la base con un trigger. La etiqueta manda sobre ella: ponerla la sella, quitarla la borra (migración 023), de forma que volver a etiquetar más adelante cae en la quincena en la que se etiquetó y no en la vieja. Asignarle un `contacted_by` o moverlo a un estado de contactado también la sellan cuando está vacía — son los que hacen que el lead salga como "sin etiquetar". Solo en UPDATE: Raúl inserta sus leads ya con `contacted_by` (quién los *va* a contactar), y eso no cuenta. La etiqueta se pone desde la ficha del lead, el menú de la tarjeta en la lista y el encabezado del chat de WhatsApp. Borrar un chat **no** toca el KPI: la etiqueta y la fecha se quedan en el lead. Borrar el chat es limpiar la bandeja, no deshacer el contacto — el trabajo de la quincena ya se hizo y tiene que seguir contando.
+**Se contacta al enviar el primer mensaje** (migración 028 y `src/lib/lead-contacto.ts`). Al salir un mensaje o un archivo por WhatsApp, el lead pasa de `new` a `contacted`, se queda con dueño si no lo tenía y con etiqueta `frio` si no la tenía. Abrir el chat para leer no marca nada.
+
+Antes no lo hacía nadie y se notaba en tres sitios a la vez: el lead seguía saliendo como "Nuevo" y alguien le volvía a escribir, el KPI enseñaba como "sin etiquetar" trabajo que sí se había hecho, y borrar el chat parecía devolver el lead a no contactado. La causa era una sola: **el chat era el único registro del contacto**. `tagLeadContactedBy` (abrir el chat) solo escribía el dueño cuando `contacted_by` estaba vacío, y Raúl inserta sus leads con el dueño ya puesto — 307 de 322 —, así que no hacía nada; enviar no tocaba el lead; y el trigger sellaba la fecha en la transición de `contacted_by`, que en esos leads ocurrió en el INSERT, donde el trigger no corría.
+
+`contacted_at` la pone sola la base. La etiqueta manda sobre ella: ponerla la sella, quitarla la borra (migración 023), de forma que volver a etiquetar más adelante cae en la quincena en la que se etiquetó y no en la vieja. La sellan también mover el lead a un estado de contactado y **nacer** ya etiquetado o ya contactado (el trigger corre en INSERT desde la 028). Lo que ya **no** la sella es asignarle un `contacted_by`: asignar no es contactar, y era de donde salía la mitad de los "sin etiquetar" — Raúl asigna 300 leads de una. Y si algún camino deja fecha sin etiqueta, el trigger pone `frio`: un contacto que no cuenta ya no se puede crear sin querer.
+
+La etiqueta se pone desde la ficha del lead, el menú de la tarjeta en la lista y el encabezado del chat de WhatsApp. Borrar un chat **no** toca el KPI: el estado, el dueño, la etiqueta y la fecha se quedan en el lead. Antes de borrar se sella el contacto si el chat tenía mensajes enviados (los chats viejos, de cuando enviar no marcaba nada) y se guarda la foto del chat en `conversaciones_borradas` —conteo de mensajes, fechas, a quién estaba asignado, cómo quedó el lead— más una entrada `chat_deleted` en el historial de la ficha. Si esa foto no se puede guardar, **no se borra**: se responde que falta correr la 028. Borrar el chat es limpiar la bandeja, no deshacer el contacto.
 
 **Tablero To Do**: una tarea completada se borra sola el día siguiente a su fecha — el día de la fecha sigue a la vista aunque ya esté hecha. La limpieza (`src/lib/task-cleanup.ts`) corre al abrir el tablero y en `GET /api/tasks`, no en un cron: solo importa que no estén cuando alguien mira. Las que no se completaron se quedan y se pintan con fondo rojo claro. Las tareas sin fecha nunca se borran solas.
 
@@ -161,6 +167,7 @@ src/
   lib/
     team.ts               # Los 4 miembros (usuario, nombre, email, color, rol)
     kpi.ts                # Meta de la quincena: 55 contactos (50 en frío, 5 investigados)
+    lead-contacto.ts      # Enviar un mensaje deja el lead contactado, con dueño y etiqueta
     lead-filter.ts        # Sondea la web y puntúa con IA lo que trae Raúl, antes de guardarlo
     view-as.ts            # Cookie de la vista prestada del Dueño
     diana-scope.ts        # Qué le muestra Diana a cada persona

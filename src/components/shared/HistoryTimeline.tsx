@@ -22,6 +22,8 @@ const EVENT_ICONS: Record<string, string> = {
   converted: "⭐",
   note_added: "📝",
   file_uploaded: "📎",
+  // La bandeja se limpió, pero el contacto quedó apuntado aquí
+  chat_deleted: "🗑️",
 };
 
 export function HistoryTimeline({ events }: Props) {

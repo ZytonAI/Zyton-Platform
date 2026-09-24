@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth/session";
+import { sellarContactoAlEnviar } from "@/lib/lead-contacto";
 import { withColumnFallback } from "@/lib/pg-compat";
 import { mensajeDeErrorLegible, sendBridgeMessage } from "@/lib/wa-bridge";
 import { resolverDestinoConversacion } from "@/lib/wa-destino";
@@ -7,7 +9,9 @@ import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // `realMember` y no `member`: si el Dueño está "viendo como" alguien, el
+  // mensaje lo escribió él y el contacto es suyo, no del otro.
+  const { user, realMember } = await getSession();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = sendMessageSchema.safeParse(await request.json().catch(() => null));
@@ -104,6 +108,11 @@ export async function POST(request: Request) {
       .from("conversations")
       .update({ last_message: body.trim(), last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq("id", conversation_id);
+
+    // El mensaje salió: el lead queda contactado, con dueño y con etiqueta.
+    // Es lo que evita que otro se lo encuentre como "Nuevo" y le vuelva a
+    // escribir, y lo que hace que el contacto sobreviva a borrar el chat.
+    await sellarContactoAlEnviar(supabase, conv, realMember?.slug);
 
     return NextResponse.json(msg, { status: 201 });
   } catch (err) {
