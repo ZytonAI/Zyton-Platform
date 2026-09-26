@@ -16,6 +16,7 @@ import type { Lead, HistoryEvent, FileAttachment } from "@/types";
 import { MemberBadges } from "@/components/shared/MemberTag";
 import { ContactTypeBadge } from "@/components/shared/ContactTypeTag";
 import { useMemberById } from "@/components/layout/SessionContext";
+import { SOURCE_EX_CLIENTE } from "@/lib/saas";
 
 interface Props {
   lead: Lead;
@@ -106,7 +107,7 @@ export function LeadDetailClient({ lead: initialLead, history: initialHistory, a
               <Field label="Email" value={lead.email} />
               <Field label="Teléfono" value={lead.phone} />
               <Field label="Empresa" value={lead.company} />
-              <Field label="Fuente" value={lead.source} />
+              <Field label="Fuente" value={lead.source === SOURCE_EX_CLIENTE ? "Ex cliente del CRM" : lead.source} />
               <div className="col-span-2">
                 <p className="text-xs text-muted-foreground mb-1.5">
                   Equipo

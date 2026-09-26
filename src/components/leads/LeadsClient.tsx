@@ -12,11 +12,12 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   Plus, Search, Phone, Globe, Building2,
   MoreHorizontal, Pencil, Trash2, Eye,
-  Bot, FileText, MessageCircle, Flame, CalendarClock, UserPlus, Snowflake,
+  Bot, FileText, MessageCircle, Flame, CalendarClock, UserPlus, Snowflake, RotateCcw,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { LEAD_STATUS, LEAD_STATUS_ORDER } from "@/lib/status-config";
+import { SOURCE_EX_CLIENTE } from "@/lib/saas";
 import type { Lead, LeadStatus } from "@/types";
 import { MemberBadges } from "@/components/shared/MemberTag";
 import { TEAM_MEMBERS, memberBySlug } from "@/lib/team";
@@ -42,6 +43,8 @@ const FILTERS: { label: string; value: string }[] = [
   // Cómo fue el contacto — lo que mide el KPI de la quincena
   { label: "En frío",           value: "frio" },
   { label: "Con investigación", value: "investigado" },
+  // Empresas que pagaban el CRM y lo dejaron (las trae /api/saas/eventos)
+  { label: "Ex clientes",       value: SOURCE_EX_CLIENTE },
 ];
 
 /**
@@ -193,6 +196,7 @@ export function LeadsClient({ initialLeads }: Props) {
       filter === "alta"     ? l.priority === "alta" :
       filter === "frio" || filter === "investigado" ? l.contact_type === filter :
       filter === "raul"     ? l.source === "raul" :
+      filter === SOURCE_EX_CLIENTE ? l.source === SOURCE_EX_CLIENTE :
       filter === "analyzed" ? l.analyzed :
       l.status === filter;
     return matchSearch && matchFilter;
@@ -582,6 +586,11 @@ export function LeadsClient({ initialLeads }: Props) {
                 {lead.source === "raul" && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-500 flex items-center gap-1 tracking-tight ring-1 ring-blue-100">
                     <Bot className="w-2.5 h-2.5" /> Raúl
+                  </span>
+                )}
+                {lead.source === SOURCE_EX_CLIENTE && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 flex items-center gap-1 tracking-tight ring-1 ring-rose-100">
+                    <RotateCcw className="w-2.5 h-2.5" /> Ex cliente
                   </span>
                 )}
                 {lead.analyzed && (
