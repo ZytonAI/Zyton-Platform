@@ -21,7 +21,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 export const DEFAULT_ROLE: Role = "partner";
 
 /** Rutas que solo puede abrir el Dueño. */
-export const OWNER_ONLY_PATHS = ["/invoices"] as const;
+export const OWNER_ONLY_PATHS = ["/invoices", "/saas"] as const;
 
 export function isOwner(role: Role): boolean {
   return role === "owner";

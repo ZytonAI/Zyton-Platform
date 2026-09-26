@@ -11,6 +11,7 @@ import {
   Bot,
   LogOut,
   Receipt,
+  Building2,
   CalendarDays,
   BookOpen,
   ListTodo,
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/chat",      label: "Chat",        icon: MessageCircle },
   { href: "/agents",    label: "Agentes",     icon: Bot },
   { href: "/invoices",  label: "Facturas",    icon: Receipt },
+  { href: "/saas",      label: "Empresas SaaS", icon: Building2 },
   { href: "/events",    label: "Calendario",  icon: CalendarDays },
 ];
 
